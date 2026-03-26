@@ -17,7 +17,6 @@ export default function WorkoutPage() {
   const [timer, setTimer] = useState(0);
   const [allWorkoutData, setAllWorkoutData] = useState<any>({});
   const [baselines, setBaselines] = useState<Record<string, number>>({});
-  const [showBaselineInput, setShowBaselineInput] = useState(false);
   const [expandedHistory, setExpandedHistory] = useState<string | null>(null);
 
   useEffect(() => {
@@ -58,6 +57,17 @@ export default function WorkoutPage() {
     localStorage.setItem("gym_session_cache", JSON.stringify(updatedData));
   };
 
+  const editSet = (exKey: string, setId: number) => {
+    const set = allWorkoutData[exKey].find((s: any) => s.id === setId);
+    const newW = prompt("new weight", set.weight);
+    const newR = prompt("new reps", set.reps);
+    if (!newW || !newR) return;
+    const updatedSets = allWorkoutData[exKey].map((s: any) => s.id === setId ? { ...s, weight: newW, reps: newR } : s);
+    const updatedData = { ...allWorkoutData, [exKey]: updatedSets };
+    setAllWorkoutData(updatedData);
+    localStorage.setItem("gym_session_cache", JSON.stringify(updatedData));
+  };
+
   const logBodyWeight = () => {
     if (!bodyWeightInput) return;
     const dateObj = new Date(logDate);
@@ -71,9 +81,9 @@ export default function WorkoutPage() {
 
   const editWeightPoint = (id: number) => {
     const entry = weightHistory.find(h => h.id === id);
-    const action = confirm(`Edit ${entry?.value}kg? OK to edit, Cancel to delete.`);
+    const action = confirm(`edit ${entry?.value}kg ok to edit cancel to delete`);
     if (action) {
-      const newVal = prompt("Enter new weight:", entry?.value.toString());
+      const newVal = prompt("new weight", entry?.value.toString());
       if (!newVal || isNaN(parseFloat(newVal))) return;
       const updated = weightHistory.map(h => h.id === id ? { ...h, value: parseFloat(newVal) } : h);
       setWeightHistory(updated);
@@ -97,8 +107,8 @@ export default function WorkoutPage() {
   const getY = (v: number, min: number, max: number) => graphH - padding.bottom - ((v - min) / (max - min || 1) * (graphH - padding.top - padding.bottom));
 
   const weightsArr = weightHistory.map(d => d.value);
-  const minW = weightsArr.length ? Math.min(...weightsArr) - 2 : 0;
-  const maxW = weightsArr.length ? Math.max(...weightsArr) + 2 : 10;
+  const minW = weightsArr.length ? Math.min(...weightsArr) - 1 : 0;
+  const maxW = weightsArr.length ? Math.max(...weightsArr) + 1 : 10;
   const bwLinePath = weightHistory.length > 1 ? weightHistory.map((d, i) => `${i === 0 ? 'M' : 'L'} ${getX(i, weightHistory.length)} ${getY(d.value, minW, maxW)}`).join(" ") : "";
 
   return (
@@ -146,13 +156,13 @@ export default function WorkoutPage() {
 
       {view === 'lift' && activeSubView === 'progress' && (
         <div className="bg-zinc-900 rounded-[40px] p-6 border border-zinc-800">
-          <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest italic mb-6 text-center">lift volume progress</p>
-          <div className="h-[200px] w-full">
-            <svg width="100%" height="100%" viewBox={`0 0 ${graphW} ${graphH}`} preserveAspectRatio="none">
-              {liftProgressData.length > 1 && (
-                <path d={liftProgressData.map((d:any, i:number) => `${i === 0 ? 'M' : 'L'} ${getX(i, liftProgressData.length)} ${getY(d.val, 0, Math.max(...liftProgressData.map((x:any)=>x.val)) + 10)}`).join(" ")} fill="none" stroke="#a855f7" strokeWidth="4" />
-              )}
-            </svg>
+          <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest italic mb-6 text-center">lift volume (kg x reps)</p>
+          <div className="h-[200px] w-full flex items-end justify-around gap-1 px-4">
+            {liftProgressData.map((d: any, i: number) => {
+              const max = Math.max(...liftProgressData.map((x: any) => x.val));
+              const height = (d.val / (max || 1)) * 100;
+              return <div key={d.id} className="bg-purple-600 w-full rounded-t-sm transition-all duration-500" style={{ height: `${Math.max(height, 5)}%` }} />;
+            })}
           </div>
         </div>
       )}
@@ -171,23 +181,23 @@ export default function WorkoutPage() {
               const isExpanded = expandedHistory === exKey;
               return (
                 <div key={ex.name} className="border-b border-zinc-800 py-5 last:border-0 px-2">
-                  <div className="flex justify-between items-center mb-3">
+                  <div className="flex justify-between items-center">
                     <p onClick={() => { setDayIndex(historyDayIndex); setExerciseIndex(exIdx); setView('lift'); setActiveSubView('workout'); }} className="text-[10px] font-black uppercase text-purple-400 italic cursor-pointer border-b border-purple-900">{ex.name}</p>
-                    <button onClick={() => setExpandedHistory(isExpanded ? null : exKey)} className="text-zinc-600 text-xs">{isExpanded ? '▲' : '▼'}</button>
+                    <button onClick={() => setExpandedHistory(isExpanded ? null : exKey)} className="bg-zinc-800 w-8 h-8 rounded-full flex items-center justify-center text-xs">{isExpanded ? '▲' : '▼'}</button>
                   </div>
                   {isExpanded && (
-                    <div className="space-y-2 mb-3">
-                      {sets.map((s: any) => (
-                        <div key={s.id} className="flex justify-between bg-black/40 p-2 rounded-lg items-center">
+                    <div className="space-y-2 mt-4 transition-all">
+                      {sets.length === 0 ? <p className="text-[8px] uppercase text-zinc-600 font-black italic">no sets logged</p> : sets.map((s: any) => (
+                        <div key={s.id} className="flex justify-between bg-black/40 p-3 rounded-xl items-center border border-zinc-800/50">
                           <span className="text-[10px] font-black italic">{s.weight}kg x {s.reps}</span>
-                          <button onClick={() => deleteSet(exKey, s.id)} className="text-red-500 text-[8px] font-black uppercase">Delete</button>
+                          <div className="flex gap-2">
+                            <button onClick={() => editSet(exKey, s.id)} className="text-zinc-500 text-[8px] font-black uppercase bg-zinc-800 px-2 py-1 rounded">Edit</button>
+                            <button onClick={() => deleteSet(exKey, s.id)} className="text-red-500 text-[8px] font-black uppercase bg-red-500/10 px-2 py-1 rounded">Del</button>
+                          </div>
                         </div>
                       ))}
                     </div>
                   )}
-                  <div className="flex flex-wrap gap-2">
-                    {!isExpanded && sets.map((s: any) => (<span key={s.id} className="bg-black/60 px-3 py-2 rounded-lg text-[10px] font-black italic border border-zinc-800">{s.weight}kg × {s.reps}</span>))}
-                  </div>
                 </div>
               );
             })}
@@ -199,10 +209,10 @@ export default function WorkoutPage() {
         <div className="space-y-6">
           <div className="bg-zinc-900 rounded-[40px] p-6 border border-zinc-800">
             <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest italic mb-6 text-center">Body Weight Graph</p>
-            <div className="h-[200px] w-full mb-8">
-              <svg width="100%" height="100%" viewBox={`0 0 ${graphW} ${graphH}`} preserveAspectRatio="none">
-                {weightHistory.length > 1 && <path d={bwLinePath} fill="none" stroke="#a855f7" strokeWidth="4" strokeLinecap="round" />}
-                {weightHistory.map((d, i) => (<circle key={d.id} cx={getX(i, weightHistory.length)} cy={getY(d.value, minW, maxW)} r="8" onClick={() => editWeightPoint(d.id)} className="fill-purple-500 stroke-[4px] stroke-black cursor-pointer active:scale-150 transition-transform" />))}
+            <div className="h-[220px] w-full mb-8">
+              <svg width="100%" height="100%" viewBox={`0 0 ${graphW} ${graphH}`} preserveAspectRatio="none" shapeRendering="geometricPrecision" style={{ overflow: 'visible' }}>
+                {weightHistory.length > 1 && <path d={bwLinePath} fill="none" stroke="#a855f7" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />}
+                {weightHistory.map((d, i) => (<circle key={d.id} cx={getX(i, weightHistory.length)} cy={getY(d.value, minW, maxW)} r="6" onClick={() => editWeightPoint(d.id)} className="fill-purple-500 stroke-[3px] stroke-black cursor-pointer active:scale-125 transition-transform" />))}
               </svg>
             </div>
             <div className="grid grid-cols-2 gap-2 mb-4">
