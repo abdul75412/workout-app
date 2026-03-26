@@ -17,8 +17,11 @@ export default function WorkoutPage() {
   const [timer, setTimer] = useState(0);
   const [allWorkoutData, setAllWorkoutData] = useState<any>({});
   const [expandedHistory, setExpandedHistory] = useState<string | null>(null);
+  
+  // States for Pop-ups
   const [editingWeightId, setEditingWeightId] = useState<number | null>(null);
   const [editWeightValue, setEditWeightValue] = useState("");
+  const [historyEditModal, setHistoryEditModal] = useState<{exKey: string, setId: number, weight: string, reps: string} | null>(null);
 
   useEffect(() => {
     const savedData = localStorage.getItem("gym_session_cache");
@@ -49,22 +52,22 @@ export default function WorkoutPage() {
     setWeight(""); setReps(""); setTimer(90);
   };
 
+  const saveHistoryEdit = () => {
+    if (!historyEditModal) return;
+    const { exKey, setId, weight, reps } = historyEditModal;
+    const updatedSets = allWorkoutData[exKey].map((s: any) => s.id === setId ? { ...s, weight, reps } : s);
+    const updatedData = { ...allWorkoutData, [exKey]: updatedSets };
+    setAllWorkoutData(updatedData);
+    localStorage.setItem("gym_session_cache", JSON.stringify(updatedData));
+    setHistoryEditModal(null);
+  };
+
   const deleteSet = (exKey: string, setId: number) => {
     const updatedSets = allWorkoutData[exKey].filter((s: any) => s.id !== setId);
     const updatedData = { ...allWorkoutData, [exKey]: updatedSets };
     setAllWorkoutData(updatedData);
     localStorage.setItem("gym_session_cache", JSON.stringify(updatedData));
-  };
-
-  const editSet = (exKey: string, setId: number) => {
-    const set = allWorkoutData[exKey].find((s: any) => s.id === setId);
-    const newW = prompt("new weight", set.weight);
-    const newR = prompt("new reps", set.reps);
-    if (newW === null || newR === null) return;
-    const updatedSets = allWorkoutData[exKey].map((s: any) => s.id === setId ? { ...s, weight: newW, reps: newR } : s);
-    const updatedData = { ...allWorkoutData, [exKey]: updatedSets };
-    setAllWorkoutData(updatedData);
-    localStorage.setItem("gym_session_cache", JSON.stringify(updatedData));
+    setHistoryEditModal(null);
   };
 
   const logBodyWeight = () => {
@@ -76,21 +79,6 @@ export default function WorkoutPage() {
     setWeightHistory(updated);
     localStorage.setItem("body_weight_logs", JSON.stringify(updated));
     setBodyWeightInput("");
-  };
-
-  const updateWeightEntry = () => {
-    if (!editingWeightId) return;
-    const updated = weightHistory.map(h => h.id === editingWeightId ? { ...h, value: parseFloat(editWeightValue) } : h);
-    setWeightHistory(updated);
-    localStorage.setItem("body_weight_logs", JSON.stringify(updated));
-    setEditingWeightId(null);
-  };
-
-  const deleteWeightEntry = () => {
-    const updated = weightHistory.filter(h => h.id !== editingWeightId);
-    setWeightHistory(updated);
-    localStorage.setItem("body_weight_logs", JSON.stringify(updated));
-    setEditingWeightId(null);
   };
 
   const liftProgressData = useMemo(() => {
@@ -111,15 +99,41 @@ export default function WorkoutPage() {
 
   return (
     <div className="max-w-[100vw] overflow-x-hidden min-h-screen bg-[#0a0b0d] text-white font-sans pb-44 px-5">
+      
+      {/* REST TIMER OVERLAY */}
       {timer > 0 && (
         <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/80 backdrop-blur-sm">
           <div className="bg-zinc-900 border border-zinc-800 p-8 rounded-[40px] text-center w-full max-w-[300px]">
             <p className="text-6xl font-black italic tabular-nums mb-8">{Math.floor(timer/60)}:{(timer%60).toString().padStart(2,'0')}</p>
             <div className="grid grid-cols-2 gap-3 mb-4">
-              <button onClick={() => setTimer(t => t + 30)} className="bg-zinc-800 py-3 rounded-2xl font-black text-[10px] uppercase">+30s</button>
-              <button onClick={() => setTimer(t => t + 60)} className="bg-zinc-800 py-3 rounded-2xl font-black text-[10px] uppercase">+1m</button>
+              <button onClick={() => setTimer(t => t + 30)} className="bg-zinc-800 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest">+30s</button>
+              <button onClick={() => setTimer(t => t + 60)} className="bg-zinc-800 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest">+1m</button>
             </div>
-            <button onClick={() => setTimer(0)} className="w-full bg-white text-black py-4 rounded-2xl font-black uppercase text-[10px]">skip rest</button>
+            <button onClick={() => setTimer(0)} className="w-full bg-white text-black py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest">skip rest</button>
+          </div>
+        </div>
+      )}
+
+      {/* HISTORY EDIT POPUP */}
+      {historyEditModal && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/90 backdrop-blur-md px-6">
+          <div className="bg-zinc-900 border border-zinc-800 p-8 rounded-[40px] w-full max-w-[340px] shadow-2xl">
+            <p className="text-[10px] font-black uppercase text-purple-400 mb-6 tracking-[0.2em] text-center italic">Edit Set</p>
+            <div className="grid grid-cols-2 gap-4 mb-8">
+              <div className="text-center">
+                <p className="text-[8px] font-black uppercase text-zinc-600 mb-2 tracking-widest">weight</p>
+                <input type="number" value={historyEditModal.weight} onChange={(e) => setHistoryEditModal({...historyEditModal, weight: e.target.value})} className="bg-black w-full text-3xl font-black p-4 rounded-2xl border border-zinc-800 outline-none text-center" />
+              </div>
+              <div className="text-center">
+                <p className="text-[8px] font-black uppercase text-zinc-600 mb-2 tracking-widest">reps</p>
+                <input type="number" value={historyEditModal.reps} onChange={(e) => setHistoryEditModal({...historyEditModal, reps: e.target.value})} className="bg-black w-full text-3xl font-black p-4 rounded-2xl border border-zinc-800 outline-none text-center text-purple-400" />
+              </div>
+            </div>
+            <div className="space-y-3">
+              <button onClick={saveHistoryEdit} className="w-full bg-white text-black py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest">Save Changes</button>
+              <button onClick={() => deleteSet(historyEditModal.exKey, historyEditModal.setId)} className="w-full bg-red-900/20 text-red-500 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest">Delete Set</button>
+              <button onClick={() => setHistoryEditModal(null)} className="w-full text-zinc-500 py-2 font-black uppercase text-[8px] tracking-widest">Cancel</button>
+            </div>
           </div>
         </div>
       )}
@@ -142,7 +156,7 @@ export default function WorkoutPage() {
               <div className="bg-black rounded-[28px] p-6 border border-zinc-800 text-center"><p className="text-[9px] font-black uppercase text-zinc-700 mb-2">weight</p><input type="number" value={weight} onChange={(e) => setWeight(e.target.value)} className="bg-transparent text-5xl font-black w-full text-center outline-none" placeholder="0" /></div>
               <div className="bg-black rounded-[28px] p-6 border border-zinc-800 text-center"><p className="text-[9px] font-black uppercase text-zinc-700 mb-2">reps</p><input type="number" value={reps} onChange={(e) => setReps(e.target.value)} className="bg-transparent text-5xl font-black w-full text-center text-purple-400 outline-none" placeholder="0" /></div>
             </div>
-            <button onClick={logSet} className="w-full bg-white text-black py-6 rounded-3xl font-black uppercase text-[12px] tracking-[0.2em]">log set</button>
+            <button onClick={logSet} className="w-full bg-white text-black py-6 rounded-3xl font-black uppercase text-[12px] tracking-[0.2em] shadow-lg active:scale-95 transition-transform">log set</button>
           </div>
           <div className="flex justify-between items-center bg-zinc-900/50 p-2 rounded-2xl border border-zinc-800/50 font-black uppercase text-[10px]">
             <button onClick={() => setExerciseIndex(i => Math.max(0, i-1))} className="p-4 text-zinc-600">prev</button>
@@ -165,33 +179,40 @@ export default function WorkoutPage() {
       )}
 
       {view === 'history' && (
-        <div className="bg-zinc-900 rounded-[40px] p-6 border border-zinc-800">
-          {currentPhase.days[historyDayIndex].exercises.map((ex, exIdx) => {
-            const exKey = `w${selectedWeek}-${ex.name}`;
-            const sets = allWorkoutData[exKey] || [];
-            const isExpanded = expandedHistory === exKey;
-            return (
-              <div key={ex.name} className="border-b border-zinc-800 py-5 last:border-0">
-                <div className="flex justify-between items-center">
-                  <p onClick={() => { setDayIndex(historyDayIndex); setExerciseIndex(exIdx); setView('lift'); setActiveSubView('workout'); }} className="text-[10px] font-black uppercase text-purple-400 italic cursor-pointer border-b border-purple-900">{ex.name}</p>
-                  <button onClick={() => setExpandedHistory(isExpanded ? null : exKey)} className="bg-zinc-800 w-8 h-8 rounded-full flex items-center justify-center text-xs">{isExpanded ? '▲' : '▼'}</button>
-                </div>
-                {isExpanded && (
-                  <div className="mt-4 space-y-2">
-                    {sets.map((s: any) => (
-                      <div key={s.id} className="flex justify-between bg-black/40 p-3 rounded-xl items-center">
-                        <span className="text-[10px] font-black italic">{s.weight}kg x {s.reps}</span>
-                        <div className="flex gap-2">
-                          <button onClick={() => editSet(exKey, s.id)} className="text-zinc-500 text-[8px] font-black uppercase">Edit</button>
-                          <button onClick={() => deleteSet(exKey, s.id)} className="text-red-500 text-[8px] font-black uppercase">Del</button>
-                        </div>
-                      </div>
-                    ))}
+        <div className="space-y-4">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+            {currentPhase.days.map((day, idx) => (
+              <button key={idx} onClick={() => setHistoryDayIndex(idx)} className={`min-w-[90px] py-3 rounded-xl font-black uppercase text-[9px] border ${historyDayIndex === idx ? "bg-purple-600 border-purple-600" : "bg-zinc-900 text-zinc-500 border-zinc-800"}`}>{day.label}</button>
+            ))}
+          </div>
+          <div className="bg-zinc-900 rounded-[40px] p-6 border border-zinc-800">
+            {currentPhase.days[historyDayIndex].exercises.map((ex, exIdx) => {
+              const exKey = `w${selectedWeek}-${ex.name}`;
+              const sets = allWorkoutData[exKey] || [];
+              const isExpanded = expandedHistory === exKey;
+              return (
+                <div key={ex.name} className="border-b border-zinc-800 py-5 last:border-0">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p onClick={() => { setDayIndex(historyDayIndex); setExerciseIndex(exIdx); setView('lift'); setActiveSubView('workout'); }} className="text-[10px] font-black uppercase text-purple-400 italic cursor-pointer border-b border-purple-900 inline-block mb-1">{ex.name}</p>
+                      <p className="text-[8px] font-black uppercase text-zinc-600 tracking-widest">{sets.length} sets logged</p>
+                    </div>
+                    <button onClick={() => setExpandedHistory(isExpanded ? null : exKey)} className="bg-zinc-800 w-8 h-8 rounded-full flex items-center justify-center text-xs">{isExpanded ? '▲' : '▼'}</button>
                   </div>
-                )}
-              </div>
-            );
-          })}
+                  {isExpanded && (
+                    <div className="mt-4 space-y-2">
+                      {sets.map((s: any) => (
+                        <div key={s.id} className="flex justify-between bg-black/40 p-3 rounded-xl items-center border border-zinc-800/50">
+                          <span className="text-[10px] font-black italic tracking-widest">{s.weight}kg <span className="text-zinc-600 mx-1">×</span> {s.reps}</span>
+                          <button onClick={() => setHistoryEditModal({ exKey, setId: s.id, weight: s.weight, reps: s.reps })} className="text-zinc-500 text-[8px] font-black uppercase bg-zinc-800 px-3 py-1.5 rounded-lg tracking-widest">Edit</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -207,19 +228,30 @@ export default function WorkoutPage() {
                 ))}
               </svg>
             </div>
+            
             <div className="grid grid-cols-2 gap-2 mb-4">
               <input type="date" value={logDate} onChange={(e) => setLogDate(e.target.value)} className="bg-black p-4 rounded-2xl text-[10px] font-black border border-zinc-800 outline-none" />
               <input type="number" step="0.1" value={bodyWeightInput} onChange={(e) => setBodyWeightInput(e.target.value)} placeholder="0.0kg" className="bg-black p-4 rounded-2xl font-black text-xl border border-zinc-800 outline-none" />
             </div>
-            <button onClick={logBodyWeight} className="w-full bg-white text-black py-4 rounded-2xl font-black text-[11px] uppercase">log weight</button>
+            <button onClick={logBodyWeight} className="w-full bg-white text-black py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest">log weight</button>
             
             {editingWeightId && (
-              <div className="mt-6 p-4 bg-black/40 border border-purple-500/30 rounded-3xl animate-in fade-in slide-in-from-top-2">
-                <p className="text-[8px] font-black uppercase text-purple-400 mb-3 tracking-widest text-center">Edit Selected Entry</p>
+              <div className="mt-6 p-4 bg-black/40 border border-purple-500/30 rounded-3xl">
+                <p className="text-[8px] font-black uppercase text-purple-400 mb-3 tracking-widest text-center italic">Quick Edit Weight</p>
                 <div className="flex gap-2">
                   <input type="number" value={editWeightValue} onChange={(e) => setEditWeightValue(e.target.value)} className="flex-1 bg-zinc-900 p-3 rounded-xl font-black text-lg outline-none" />
-                  <button onClick={updateWeightEntry} className="bg-purple-600 px-4 rounded-xl font-black text-[10px] uppercase">Update</button>
-                  <button onClick={deleteWeightEntry} className="bg-red-900/50 text-red-500 px-4 rounded-xl font-black text-[10px] uppercase">Del</button>
+                  <button onClick={() => {
+                    const updated = weightHistory.map(h => h.id === editingWeightId ? { ...h, value: parseFloat(editWeightValue) } : h);
+                    setWeightHistory(updated);
+                    localStorage.setItem("body_weight_logs", JSON.stringify(updated));
+                    setEditingWeightId(null);
+                  }} className="bg-purple-600 px-4 rounded-xl font-black text-[10px] uppercase">Update</button>
+                  <button onClick={() => {
+                    const updated = weightHistory.filter(h => h.id !== editingWeightId);
+                    setWeightHistory(updated);
+                    localStorage.setItem("body_weight_logs", JSON.stringify(updated));
+                    setEditingWeightId(null);
+                  }} className="bg-red-900/50 text-red-500 px-4 rounded-xl font-black text-[10px] uppercase">Del</button>
                 </div>
               </div>
             )}
