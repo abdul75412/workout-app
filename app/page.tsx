@@ -20,7 +20,7 @@ export default function WorkoutPage() {
   const [expandedEx, setExpandedEx] = useState<string | null>(null);
   const [baselines, setBaselines] = useState<Record<string, number>>({});
   const [showConfetti, setShowConfetti] = useState(false);
-  const [activeDotId, setActiveDotId] = useState<number | null>(null); // State to manage active graph action buttons
+  const [activeDotId, setActiveDotId] = useState<number | null>(null);
 
   const currentPhase = workoutPlan.phase1;
   const currentDay = currentPhase.days[dayIndex];
@@ -29,7 +29,6 @@ export default function WorkoutPage() {
   const currentSets = allWorkoutData[storageKey] || [];
   const historyDay = currentPhase.days[historyDayIndex];
 
-  // Load Data on Mount
   useEffect(() => {
     const savedData = localStorage.getItem("gym_session_cache");
     const savedWeightLogs = localStorage.getItem("body_weight_logs");
@@ -39,14 +38,12 @@ export default function WorkoutPage() {
     if (savedBaselines) setBaselines(JSON.parse(savedBaselines));
   }, []);
 
-  // Timer Logic
   useEffect(() => {
     let interval: any;
     if (timer > 0) interval = setInterval(() => setTimer((t) => t - 1), 1000);
     return () => clearInterval(interval);
   }, [timer]);
 
-  // Global PBs for celebration and card display
   const globalPBs = useMemo(() => {
     const bests: Record<string, number> = { ...baselines };
     Object.keys(allWorkoutData).forEach(key => {
@@ -62,7 +59,6 @@ export default function WorkoutPage() {
     return bests;
   }, [allWorkoutData, baselines]);
 
-  // Last Week Data Comparison for active workout card
   const lastWeekData = useMemo(() => {
     if (selectedWeek === 1) return null;
     const prevKey = `w${selectedWeek - 1}-${currentExercise.name}`;
@@ -73,11 +69,9 @@ export default function WorkoutPage() {
     return { weight: maxW, reps: maxR };
   }, [selectedWeek, currentExercise.name, allWorkoutData]);
 
-  // Exercise progression data for subview, filtered week-by-week
   const exerciseProgressData = useMemo(() => {
     const progress: { week: number, maxWeight: number }[] = [];
     const weeksToShow = selectedWeek === 1 ? [1] : [selectedWeek, selectedWeek - 1];
-    
     weeksToShow.forEach(w => {
       const sets = allWorkoutData[`w${w}-${currentExercise.name}`] || [];
       if (sets.length > 0) {
@@ -88,28 +82,22 @@ export default function WorkoutPage() {
     return progress; 
   }, [allWorkoutData, currentExercise.name, selectedWeek]);
 
-  // Log active workout set
   const logSet = () => {
     if (!weight || !reps) return;
     const inputWeight = parseFloat(weight);
     const oldBest = globalPBs[currentExercise.name] || 0;
-    
-    // Confetti logic: Check if new weight beats baseline PB
     if (inputWeight > oldBest && oldBest > 0) {
       setShowConfetti(true);
       setTimeout(() => setShowConfetti(false), 3000);
     }
-
     const newSets = [...currentSets, { weight, reps }].slice(0, 3);
     const updatedData = { ...allWorkoutData, [storageKey]: newSets };
     setAllWorkoutData(updatedData);
     localStorage.setItem("gym_session_cache", JSON.stringify(updatedData));
-    
     setWeight(""); setReps("");
-    setTimer(90); // Default rest timer is 90s
+    setTimer(90);
   };
 
-  // Delete set from historydropdown
   const deleteSet = (exKey: string, setIndex: number) => {
     const sets = [...(allWorkoutData[exKey] || [])];
     sets.splice(setIndex, 1);
@@ -118,13 +106,11 @@ export default function WorkoutPage() {
     localStorage.setItem("gym_session_cache", JSON.stringify(updatedData));
   };
 
-  // Body weight log logic (save or update)
   const logBodyWeight = () => {
     if (!bodyWeightInput) return;
     let updated;
     const dateObj = new Date(logDate);
     const formattedDate = dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' });
-    
     if (editingId) {
       updated = weightHistory.map(log => log.id === editingId ? { ...log, value: parseFloat(bodyWeightInput), rawDate: logDate, date: formattedDate } : log);
       setEditingId(null);
@@ -142,14 +128,11 @@ export default function WorkoutPage() {
     const updated = weightHistory.filter(log => log.id !== id);
     setWeightHistory(updated);
     localStorage.setItem("body_weight_logs", JSON.stringify(updated));
-    setActiveDotId(null); // Clear dot state after delete
+    setActiveDotId(null);
   };
 
-  // -----------------------------------------------------------------
-  // Interactive Purple Dot Graph Logic (RESTORED FROM PREVIOUS VER)
-  // -----------------------------------------------------------------
   const svgRef = useRef<SVGSVGElement>(null);
-  const graphWidth = 340; // Approx based on mobile padding
+  const graphWidth = 340; 
   const graphHeight = 150;
   const padding = 20;
 
@@ -190,7 +173,7 @@ export default function WorkoutPage() {
       <div className="max-w-md mx-auto px-5">
         <header className="pt-8 mb-4 uppercase italic font-black">
           <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl tracking-tighter leading-none">{view === 'weight' ? 'Body Weight' : view === 'history' ? 'History' : 'Mesocycle 1'}</h1>
+            <h1 className="text-3xl tracking-tighter leading-none">{view === 'weight' ? 'Weight' : view === 'history' ? 'History' : 'Mesocycle 1'}</h1>
           </div>
           {view !== 'weight' && (
             <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
@@ -204,7 +187,6 @@ export default function WorkoutPage() {
         <main className="relative">
           <div className={`flex transition-transform duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${view === 'history' ? '-translate-x-full' : view === 'weight' ? '-translate-x-[200%]' : 'translate-x-0'}`}>
             
-            {/* LIFT VIEW */}
             <div className="min-w-full">
               <div className="flex gap-2 overflow-x-auto no-scrollbar mb-4">
                 {currentPhase.days.map((day, idx) => (
@@ -212,7 +194,6 @@ export default function WorkoutPage() {
                 ))}
               </div>
 
-              {/* Progress/Workout Toggle */}
               <div className="flex gap-2 mb-4 bg-zinc-900/40 p-1 rounded-2xl border border-zinc-800">
                 <button onClick={() => setSubView("workout")} className={`flex-1 py-3 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all ${subView === 'workout' ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-600'}`}>Workout</button>
                 <button onClick={() => setSubView("progress")} className={`flex-1 py-3 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all ${subView === 'progress' ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-600'}`}>Progress</button>
@@ -275,7 +256,6 @@ export default function WorkoutPage() {
               </div>
             </div>
 
-            {/* HISTORY VIEW */}
             <div className="min-w-full">
               <div className="flex gap-2 overflow-x-auto no-scrollbar mb-6">
                 {currentPhase.days.map((day, idx) => (
@@ -306,7 +286,14 @@ export default function WorkoutPage() {
                                         <p className="text-[11px] font-black italic text-white">{s.weight}kg <span className="text-purple-400 ml-1">{s.reps}reps</span></p>
                                     </div>
                                     <div className="flex gap-1">
-                                        <button onClick={() => { setWeight(s.weight); setReps(s.reps); setView('lift'); setExerciseIndex(exIdx); }} className="p-2 text-zinc-600 active:text-white transition-colors"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>
+                                        <button onClick={() => { 
+                                            setWeight(s.weight); 
+                                            setReps(s.reps); 
+                                            setDayIndex(historyDayIndex); // Fixed: Map history day to workout day
+                                            setExerciseIndex(exIdx); // Fixed: Map history exercise to workout exercise
+                                            setView('lift'); 
+                                            setSubView('workout');
+                                        }} className="p-2 text-zinc-600 active:text-white transition-colors"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>
                                         <button onClick={() => deleteSet(key, i)} className="p-2 text-red-900/40 active:text-red-500 transition-colors"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
                                     </div>
                                 </div>
@@ -320,7 +307,6 @@ export default function WorkoutPage() {
               </div>
             </div>
 
-            {/* WEIGHT VIEW (MODIFIED) */}
             <div className="min-w-full">
               <div className="bg-zinc-900 border border-zinc-800 rounded-[40px] p-6 mb-4 shadow-xl">
                  <div className="flex gap-3 mb-4 flex-col sm:flex-row">
@@ -330,9 +316,6 @@ export default function WorkoutPage() {
                  <button onClick={logBodyWeight} className="w-full bg-white text-black py-5 rounded-2xl font-black uppercase text-[11px] tracking-[0.3em] active:scale-95 transition-all shadow-xl">{editingId ? 'Update Log' : 'Save Log'}</button>
               </div>
 
-              {/* --------------------------------------------------------- */}
-              {/* INTERACTIVE GRAPH INTERFACE (RESTORED)                     */}
-              {/* --------------------------------------------------------- */}
               <div className="bg-black border border-zinc-800 rounded-3xl p-5 mb-6 relative shadow-inner">
                 <p className="text-[9px] font-black uppercase text-zinc-700 mb-4 tracking-widest text-center">Progression</p>
                 {points.length > 0 ? (
@@ -349,9 +332,9 @@ export default function WorkoutPage() {
                       const isActive = activeDotId === p.id;
                       return (
                         <div key={p.id} className="absolute w-[30px] h-[30px] z-10 -translate-x-1/2 -translate-y-1/2 group" style={{ left: `${p.x}px`, top: `${p.y}px` }}>
-                          <button onClick={() => setActiveDotId(isActive ? null : p.id)} className={`w-full h-full bg-transparent ${isActive ? 'ring-2 ring-purple-500 rounded-full' : ''}`} aria-label="dot options"></button>
+                          <button onClick={() => setActiveDotId(isActive ? null : p.id)} className={`w-full h-full bg-transparent ${isActive ? 'ring-2 ring-purple-500 rounded-full' : ''}`}></button>
                           {isActive && (
-                            <div className="absolute top-[140%] left-1/2 -translate-x-1/2 bg-zinc-900 border border-zinc-800 rounded-lg p-1.5 flex gap-1 z-20 animate-in slide-in-from-top-1 shadow-2xl">
+                            <div className="absolute top-[140%] left-1/2 -translate-x-1/2 bg-zinc-900 border border-zinc-800 rounded-lg p-1.5 flex gap-1 z-20 animate-in shadow-2xl">
                               <button onClick={() => { setEditingId(p.id); const log = weightHistory.find(l=>l.id===p.id); if(log){setBodyWeightInput(log.value.toString()); setLogDate(log.rawDate);} setActiveDotId(null); }} className="p-1.5 text-zinc-400 active:text-white"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>
                               <button onClick={() => deleteWeight(p.id)} className="p-1.5 text-red-900 active:text-red-500"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
                             </div>
@@ -365,7 +348,6 @@ export default function WorkoutPage() {
                 )}
               </div>
 
-              {/* CLEAN LOGS LIST (REMOVED PICTURE ATTACHMENT ICONS) */}
               <div className="space-y-3">
                 {weightHistory.slice().reverse().map(log => (
                   <div key={log.id} className="flex justify-between items-center bg-zinc-900/40 p-5 rounded-3xl border border-zinc-800 shadow-lg group active:scale-[0.98] transition-all">
