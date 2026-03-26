@@ -13,12 +13,15 @@ export default function WorkoutPage() {
   const [reps, setReps] = useState("");
   const [bodyWeightInput, setBodyWeightInput] = useState("");
   const [logDate, setLogDate] = useState(new Date().toISOString().split('T')[0]);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [weightHistory, setWeightHistory] = useState<{id: number, date: string, value: number, rawDate: string}[]>([]);
   const [timer, setTimer] = useState(0);
   const [allWorkoutData, setAllWorkoutData] = useState<any>({});
+  const [historyLog, setHistoryLog] = useState<string[]>([]); 
+  const [expandedEx, setExpandedEx] = useState<string | null>(null);
   const [baselines, setBaselines] = useState<Record<string, number>>({});
   const [showBaselineInput, setShowBaselineInput] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
-  const [weightHistory, setWeightHistory] = useState<{id: number, date: string, value: number, rawDate: string}[]>([]);
 
   const currentPhase = workoutPlan.phase1;
   const currentDay = currentPhase.days[dayIndex];
@@ -27,32 +30,28 @@ export default function WorkoutPage() {
   const currentSets = allWorkoutData[storageKey] || [];
   const historyDay = currentPhase.days[historyDayIndex];
 
-  // Logic to find "Last Week" data
-  const lastWeekData = useMemo(() => {
-    if (selectedWeek === 1) return null;
-    const prevKey = `w${selectedWeek - 1}-${currentExercise.name}`;
-    const prevSets = allWorkoutData[prevKey] || [];
-    if (prevSets.length === 0) return null;
-    const maxW = Math.max(...prevSets.map((s: any) => parseFloat(s.weight) || 0));
-    const maxR = Math.max(...prevSets.map((s: any) => parseFloat(s.reps) || 0));
-    return { weight: maxW, reps: maxR };
-  }, [selectedWeek, currentExercise.name, allWorkoutData]);
-
+  // Load Data
   useEffect(() => {
     const savedData = localStorage.getItem("gym_session_cache");
-    const savedBaselines = localStorage.getItem("lift_baselines");
+    const savedHistory = localStorage.getItem("gym_history_grid");
     const savedWeightLogs = localStorage.getItem("body_weight_logs");
+    const savedBaselines = localStorage.getItem("lift_baselines");
     if (savedData) setAllWorkoutData(JSON.parse(savedData));
-    if (savedBaselines) setBaselines(JSON.parse(savedBaselines));
+    if (savedHistory) setHistoryLog(JSON.parse(savedHistory));
     if (savedWeightLogs) setWeightHistory(JSON.parse(savedWeightLogs));
+    if (savedBaselines) setBaselines(JSON.parse(savedBaselines));
   }, []);
 
+  // Timer Logic
   useEffect(() => {
     let interval: any;
-    if (timer > 0) interval = setInterval(() => setTimer((t) => t - 1), 1000);
+    if (timer > 0) {
+      interval = setInterval(() => setTimer((t) => t - 1), 1000);
+    }
     return () => clearInterval(interval);
   }, [timer]);
 
+  // PB Recognition
   const globalPBs = useMemo(() => {
     const bests: Record<string, number> = { ...baselines };
     Object.keys(allWorkoutData).forEach(key => {
@@ -68,6 +67,18 @@ export default function WorkoutPage() {
     return bests;
   }, [allWorkoutData, baselines]);
 
+  // Last Week Data Comparison
+  const lastWeekData = useMemo(() => {
+    if (selectedWeek === 1) return null;
+    const prevKey = `w${selectedWeek - 1}-${currentExercise.name}`;
+    const prevSets = allWorkoutData[prevKey] || [];
+    if (prevSets.length === 0) return null;
+    const maxW = Math.max(...prevSets.map((s: any) => parseFloat(s.weight) || 0));
+    const maxR = Math.max(...prevSets.map((s: any) => parseFloat(s.reps) || 0));
+    return { weight: maxW, reps: maxR };
+  }, [selectedWeek, currentExercise.name, allWorkoutData]);
+
+  // Progress Data for Chart/List
   const exerciseProgressData = useMemo(() => {
     const progress: { week: number, maxWeight: number }[] = [];
     for (let w = 1; w <= 12; w++) {
@@ -84,16 +95,19 @@ export default function WorkoutPage() {
     if (!weight || !reps) return;
     const inputWeight = parseFloat(weight);
     const oldBest = globalPBs[currentExercise.name] || 0;
+    
     if (inputWeight > oldBest && oldBest > 0) {
       setShowConfetti(true);
       setTimeout(() => setShowConfetti(false), 3000);
     }
+
     const newSets = [...currentSets, { weight, reps }];
     const updatedData = { ...allWorkoutData, [storageKey]: newSets };
     setAllWorkoutData(updatedData);
     localStorage.setItem("gym_session_cache", JSON.stringify(updatedData));
+    
     setWeight(""); setReps("");
-    setTimer(90);
+    setTimer(90); // Default rest timer
   };
 
   const saveBaseline = (val: string) => {
@@ -121,7 +135,7 @@ export default function WorkoutPage() {
       {showConfetti && (
         <div className="fixed inset-0 pointer-events-none z-[200] flex items-center justify-center bg-purple-500/10 backdrop-blur-sm animate-in fade-in duration-500">
           <div className="text-center animate-bounce">
-            <p className="text-8xl mb-2">⚡</p>
+            <p className="text-8xl mb-2">🔥</p>
             <p className="text-2xl font-black italic uppercase text-white tracking-tighter">NEW PB DETECTED</p>
           </div>
         </div>
@@ -130,15 +144,15 @@ export default function WorkoutPage() {
       <div className="max-w-md mx-auto px-5">
         <header className="pt-8 mb-4 uppercase italic font-black">
           <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl tracking-tighter leading-none">{view === 'weight' ? 'Body' : view === 'history' ? 'History' : 'Mesocycle 1'}</h1>
+            <h1 className="text-3xl tracking-tighter leading-none">{view === 'weight' ? 'Body Weight' : view === 'history' ? 'History' : 'Mesocycle 1'}</h1>
             {timer > 0 ? (
               <div className="flex items-center gap-2">
-                <button onClick={() => setTimer(t => t + 30)} className="bg-zinc-800 text-[9px] px-2 py-1 rounded-lg border border-zinc-700">+30s</button>
-                <button onClick={() => setTimer(t => t + 60)} className="bg-zinc-800 text-[9px] px-2 py-1 rounded-lg border border-zinc-700">+1m</button>
-                <div className="bg-purple-500 text-white px-4 py-1 rounded-full text-sm tabular-nums font-black">{Math.floor(timer/60)}:{(timer%60).toString().padStart(2,'0')}</div>
+                <button onClick={() => setTimer(t => t + 30)} className="bg-zinc-800 text-[9px] px-2 py-1 rounded-lg border border-zinc-700 font-black">+30s</button>
+                <button onClick={() => setTimer(t => t + 60)} className="bg-zinc-800 text-[9px] px-2 py-1 rounded-lg border border-zinc-700 font-black">+1m</button>
+                <div className="bg-purple-500 text-white px-4 py-1 rounded-full text-sm tabular-nums animate-pulse font-black">{Math.floor(timer/60)}:{(timer%60).toString().padStart(2,'0')}</div>
               </div>
             ) : (
-                <button onClick={() => setTimer(90)} className="text-zinc-700 hover:text-purple-500 transition-colors">
+                <button onClick={() => setTimer(90)} className="text-zinc-700">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
                 </button>
             )}
@@ -147,7 +161,7 @@ export default function WorkoutPage() {
           {view !== 'weight' && (
             <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
               {Array.from({ length: 12 }).map((_, i) => (
-                <button key={i} onClick={() => setSelectedWeek(i + 1)} className={`flex-shrink-0 w-14 py-3 rounded-xl text-[10px] font-black transition-all border ${selectedWeek === i + 1 ? "bg-purple-600 border-purple-500 text-white shadow-[0_0_15px_rgba(168,85,247,0.3)]" : "bg-zinc-900/40 border-zinc-800 text-zinc-600"}`}>W{i + 1}</button>
+                <button key={i} onClick={() => setSelectedWeek(i + 1)} className={`flex-shrink-0 w-14 py-3 rounded-xl text-[10px] font-black transition-all border ${selectedWeek === i + 1 ? "bg-purple-600 border-purple-500 text-white" : "bg-zinc-900/40 border-zinc-800 text-zinc-600"}`}>W{i + 1}</button>
               ))}
             </div>
           )}
@@ -160,38 +174,37 @@ export default function WorkoutPage() {
             <div className="min-w-full">
               <div className="flex gap-2 overflow-x-auto no-scrollbar mb-4">
                 {currentPhase.days.map((day, idx) => (
-                  <button key={idx} onClick={() => { setDayIndex(idx); setExerciseIndex(0); }} className={`flex-shrink-0 px-6 py-4 rounded-xl font-black uppercase text-[9px] tracking-widest border transition-all ${dayIndex === idx ? "bg-white text-black border-white shadow-lg" : "bg-zinc-900/40 text-zinc-600 border-zinc-800"}`}>{day.label}</button>
+                  <button key={idx} onClick={() => { setDayIndex(idx); setExerciseIndex(0); }} className={`flex-shrink-0 px-6 py-4 rounded-xl font-black uppercase text-[9px] tracking-widest border ${dayIndex === idx ? "bg-white text-black border-white" : "bg-zinc-900/40 text-zinc-600 border-zinc-800"}`}>{day.label}</button>
                 ))}
               </div>
 
               <div className="relative flex gap-2 mb-4 bg-zinc-900/40 p-1.5 rounded-2xl border border-zinc-800">
-                  <button onClick={() => setSubView("workout")} className={`relative z-10 flex-1 py-3 text-[8px] font-black uppercase tracking-widest rounded-xl transition-all ${subView === 'workout' ? 'bg-zinc-800 text-white' : 'text-zinc-600'}`}>Workout</button>
-                  <button onClick={() => setSubView("progress")} className={`relative z-10 flex-1 py-3 text-[8px] font-black uppercase tracking-widest rounded-xl transition-all ${subView === 'progress' ? 'bg-zinc-800 text-white' : 'text-zinc-600'}`}>Progress</button>
+                  <button onClick={() => setSubView("workout")} className={`relative z-10 flex-1 py-3 text-[8px] font-black uppercase tracking-widest rounded-xl transition-all ${subView === 'workout' ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-600'}`}>Workout</button>
+                  <button onClick={() => setSubView("progress")} className={`relative z-10 flex-1 py-3 text-[8px] font-black uppercase tracking-widest rounded-xl transition-all ${subView === 'progress' ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-600'}`}>Progress</button>
               </div>
 
-              <div className="bg-zinc-900 rounded-[40px] p-6 border border-zinc-800 min-h-[440px] shadow-2xl">
-                <div className="flex justify-between items-start mb-6">
+              <div className="bg-zinc-900 rounded-[40px] p-6 border border-zinc-800 min-h-[420px] shadow-2xl">
+                <div className="flex justify-between items-start mb-8">
                   <h2 className="text-2xl font-black italic uppercase leading-tight tracking-tighter max-w-[200px]">{currentExercise.name}</h2>
                   <div className="text-right">
-                    <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mb-1">PB</p>
+                    <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mb-1">Current PB</p>
                     <button onClick={() => setShowBaselineInput(true)} className="text-purple-400 font-black italic text-lg">{globalPBs[currentExercise.name] || 0}kg</button>
                   </div>
                 </div>
 
+                {showBaselineInput && (
+                   <div className="mb-6 animate-in slide-in-from-top-2">
+                     <input autoFocus type="number" placeholder="Enter Baseline (kg)" className="w-full bg-black border border-purple-500/50 rounded-2xl p-4 text-center text-sm font-black outline-none" onKeyDown={(e) => e.key === 'Enter' && saveBaseline(e.currentTarget.value)} />
+                   </div>
+                )}
+
                 {subView === "workout" ? (
                   <div className="space-y-6">
-                    {/* Last Week Comparison Card */}
                     {lastWeekData && (
                         <div className="bg-purple-500/5 border border-purple-500/20 rounded-2xl p-3 flex justify-between items-center animate-in fade-in slide-in-from-top-1">
-                            <span className="text-[9px] font-black uppercase text-purple-400 tracking-widest">Last Week (W{selectedWeek-1})</span>
+                            <span className="text-[9px] font-black uppercase text-purple-400">Last Week (W{selectedWeek-1})</span>
                             <span className="text-xs font-black italic text-white">{lastWeekData.weight}kg x {lastWeekData.reps}</span>
                         </div>
-                    )}
-
-                    {showBaselineInput && (
-                       <div className="animate-in slide-in-from-top-2">
-                         <input autoFocus type="number" placeholder="Enter Starting Baseline (kg)" className="w-full bg-black border border-purple-500/50 rounded-2xl p-4 text-center text-sm font-black outline-none" onKeyDown={(e) => e.key === 'Enter' && saveBaseline(e.currentTarget.value)} />
-                       </div>
                     )}
 
                     <div className="grid grid-cols-2 gap-4">
@@ -204,24 +217,26 @@ export default function WorkoutPage() {
                         <input type="number" value={reps} onChange={(e) => setReps(e.target.value)} className="bg-transparent text-5xl font-black w-full text-center text-purple-400 outline-none tabular-nums" placeholder="0" />
                       </div>
                     </div>
-                    <button onClick={logSet} className="w-full bg-white text-black py-5 rounded-2xl font-black uppercase text-[11px] tracking-[0.4em] active:scale-95 transition-all shadow-xl shadow-white/5">Log Set</button>
-                    <div className="flex gap-2 justify-center pt-2">
-                       {currentSets.map((_:any, i:number) => <div key={i} className="w-2.5 h-1 rounded-full bg-purple-500" />)}
+                    <button onClick={logSet} className="w-full bg-white text-black py-5 rounded-2xl font-black uppercase text-[11px] tracking-[0.4em] active:scale-95 transition-all">Log Set</button>
+                    <div className="flex gap-2 justify-center">
+                       {currentSets.map((_:any, i:number) => <div key={i} className="w-2 h-2 rounded-full bg-purple-500" />)}
                     </div>
                   </div>
                 ) : (
-                  <div className="h-full flex flex-col">
+                  <div className="h-full flex flex-col justify-center">
                     {exerciseProgressData.length > 0 ? (
-                      <div className="space-y-2">
+                      <div className="space-y-3">
                          {exerciseProgressData.map((p, i) => (
                            <div key={i} className="flex justify-between items-center bg-black/40 p-4 rounded-2xl border border-zinc-800">
-                             <span className="text-[10px] font-black text-zinc-600 uppercase">Week {p.week}</span>
-                             <span className="font-black italic text-purple-400">{p.maxWeight}kg</span>
+                             <span className="text-[10px] font-black text-zinc-500 uppercase">Week {p.week}</span>
+                             <span className="font-black italic text-purple-400">{p.maxWeight}kg <span className="text-[9px] text-zinc-700 not-italic uppercase ml-1">Peak</span></span>
                            </div>
                          ))}
                       </div>
                     ) : (
-                      <div className="text-center py-20 opacity-20"><p className="text-[10px] font-black uppercase tracking-[0.4em]">No History</p></div>
+                      <div className="text-center py-20 opacity-20">
+                        <p className="text-[10px] font-black uppercase tracking-[0.4em]">No Data Stored</p>
+                      </div>
                     )}
                   </div>
                 )}
@@ -229,7 +244,7 @@ export default function WorkoutPage() {
               
               <div className="flex justify-between items-center mt-4 px-2">
                 <button onClick={() => setExerciseIndex(i => Math.max(0, i-1))} disabled={exerciseIndex === 0} className="p-2 text-zinc-700 disabled:opacity-0"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4"><path d="m15 18-6-6 6-6"/></svg></button>
-                <span className="text-[10px] font-black text-zinc-700 uppercase tracking-widest">{exerciseIndex + 1} / {currentDay.exercises.length}</span>
+                <span className="text-[10px] font-black text-zinc-700 uppercase tracking-[0.3em]">{exerciseIndex + 1} / {currentDay.exercises.length}</span>
                 <button onClick={() => setExerciseIndex(i => Math.min(currentDay.exercises.length-1, i+1))} disabled={exerciseIndex === currentDay.exercises.length-1} className="p-2 text-purple-500 disabled:opacity-0"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4"><path d="m9 18 6-6-6-6"/></svg></button>
               </div>
             </div>
@@ -238,27 +253,38 @@ export default function WorkoutPage() {
             <div className="min-w-full">
               <div className="flex gap-2 overflow-x-auto no-scrollbar mb-6">
                 {currentPhase.days.map((day, idx) => (
-                  <button key={idx} onClick={() => setHistoryDayIndex(idx)} className={`flex-shrink-0 px-6 py-4 rounded-xl font-black uppercase text-[9px] tracking-widest border transition-all ${historyDayIndex === idx ? "bg-purple-600 border-purple-500 shadow-lg shadow-purple-500/20" : "bg-zinc-900/40 text-zinc-600 border-zinc-800"}`}>{day.label}</button>
+                  <button key={idx} onClick={() => setHistoryDayIndex(idx)} className={`flex-shrink-0 px-6 py-4 rounded-xl font-black uppercase text-[9px] tracking-widest border transition-all ${historyDayIndex === idx ? "bg-purple-600 border-purple-500" : "bg-zinc-900/40 text-zinc-600 border-zinc-800"}`}>{day.label}</button>
                 ))}
               </div>
+
               <div className="bg-zinc-900/50 border rounded-[40px] p-6 border-zinc-800 min-h-[440px]">
                 <div className="space-y-4">
                   {historyDay.exercises.map((ex, exIdx) => {
                     const key = `w${selectedWeek}-${ex.name}`;
-                    const sets = (allWorkoutData[key] || []).slice(0, 3);
+                    const sets = (allWorkoutData[key] || []).slice(0, 3); // Max 3 sets
+                    const isExpanded = expandedEx === exIdx.toString();
                     return (
                       <div key={exIdx} className="border-b border-zinc-800/50 pb-4">
-                        <div className="flex justify-between items-center py-2">
-                            <span className={`text-xs font-black uppercase ${sets.length > 0 ? 'text-zinc-200' : 'text-zinc-800'}`}>{ex.name}</span>
-                        </div>
-                        <div className="grid grid-cols-3 gap-2 mt-2">
-                            {sets.map((s: any, i: number) => (
-                                <div key={i} className="bg-black/40 p-2 rounded-xl border border-zinc-800 text-center">
-                                    <p className="text-[7px] font-black text-zinc-700 uppercase mb-1">Set {i+1}</p>
-                                    <p className="text-[10px] font-black italic">{s.weight}k <span className="text-purple-400">{s.reps}r</span></p>
+                        <button onClick={() => setExpandedEx(isExpanded ? null : exIdx.toString())} className="w-full flex justify-between items-center py-2">
+                            <span className={`text-xs font-black uppercase text-left ${sets.length > 0 ? 'text-zinc-200' : 'text-zinc-700'}`}>{ex.name}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[9px] font-black text-zinc-600 uppercase">{sets.length} Sets</span>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`}><path d="m6 9 6 6 6-6"/></svg>
+                            </div>
+                        </button>
+                        {isExpanded && (
+                          <div className="mt-4 space-y-2 animate-in slide-in-from-top-1">
+                            {sets.length > 0 ? sets.map((s: any, i: number) => (
+                                <div key={i} className="flex justify-between items-center bg-black/40 p-3 rounded-xl border border-zinc-800">
+                                    <span className="text-[10px] font-black text-zinc-700">SET {i + 1}</span>
+                                    <div className="flex gap-4">
+                                        <span className="text-xs font-black italic">{s.weight}kg</span>
+                                        <span className="text-xs font-black italic text-purple-400">{s.reps} reps</span>
+                                    </div>
                                 </div>
-                            ))}
-                        </div>
+                            )) : <p className="text-[9px] font-black uppercase text-zinc-800 text-center py-2">No data logged</p>}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -275,6 +301,7 @@ export default function WorkoutPage() {
                  </div>
                  <button onClick={logBodyWeight} className="w-full bg-white text-black py-5 rounded-2xl font-black uppercase text-[11px] tracking-[0.3em] active:scale-95 transition-all">Save Log</button>
               </div>
+
               <div className="space-y-2">
                 {weightHistory.slice().reverse().map(log => (
                   <div key={log.id} className="flex justify-between items-center bg-zinc-900/40 p-4 rounded-2xl border border-zinc-800/50">
@@ -284,6 +311,7 @@ export default function WorkoutPage() {
                 ))}
               </div>
             </div>
+
           </div>
         </main>
 
