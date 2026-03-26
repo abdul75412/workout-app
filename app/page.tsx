@@ -16,16 +16,15 @@ export default function WorkoutPage() {
   const [weightHistory, setWeightHistory] = useState<{id: number, date: string, value: number, rawDate: string}[]>([]);
   const [timer, setTimer] = useState(0);
   const [allWorkoutData, setAllWorkoutData] = useState<any>({});
-  const [baselines, setBaselines] = useState<Record<string, number>>({});
   const [expandedHistory, setExpandedHistory] = useState<string | null>(null);
+  const [editingWeightId, setEditingWeightId] = useState<number | null>(null);
+  const [editWeightValue, setEditWeightValue] = useState("");
 
   useEffect(() => {
     const savedData = localStorage.getItem("gym_session_cache");
     const savedWeightLogs = localStorage.getItem("body_weight_logs");
-    const savedBaselines = localStorage.getItem("lift_baselines");
     if (savedData) setAllWorkoutData(JSON.parse(savedData));
     if (savedWeightLogs) setWeightHistory(JSON.parse(savedWeightLogs));
-    if (savedBaselines) setBaselines(JSON.parse(savedBaselines));
   }, []);
 
   useEffect(() => {
@@ -61,7 +60,7 @@ export default function WorkoutPage() {
     const set = allWorkoutData[exKey].find((s: any) => s.id === setId);
     const newW = prompt("new weight", set.weight);
     const newR = prompt("new reps", set.reps);
-    if (!newW || !newR) return;
+    if (newW === null || newR === null) return;
     const updatedSets = allWorkoutData[exKey].map((s: any) => s.id === setId ? { ...s, weight: newW, reps: newR } : s);
     const updatedData = { ...allWorkoutData, [exKey]: updatedSets };
     setAllWorkoutData(updatedData);
@@ -79,20 +78,19 @@ export default function WorkoutPage() {
     setBodyWeightInput("");
   };
 
-  const editWeightPoint = (id: number) => {
-    const entry = weightHistory.find(h => h.id === id);
-    const action = confirm(`edit ${entry?.value}kg ok to edit cancel to delete`);
-    if (action) {
-      const newVal = prompt("new weight", entry?.value.toString());
-      if (!newVal || isNaN(parseFloat(newVal))) return;
-      const updated = weightHistory.map(h => h.id === id ? { ...h, value: parseFloat(newVal) } : h);
-      setWeightHistory(updated);
-      localStorage.setItem("body_weight_logs", JSON.stringify(updated));
-    } else {
-      const updated = weightHistory.filter(h => h.id !== id);
-      setWeightHistory(updated);
-      localStorage.setItem("body_weight_logs", JSON.stringify(updated));
-    }
+  const updateWeightEntry = () => {
+    if (!editingWeightId) return;
+    const updated = weightHistory.map(h => h.id === editingWeightId ? { ...h, value: parseFloat(editWeightValue) } : h);
+    setWeightHistory(updated);
+    localStorage.setItem("body_weight_logs", JSON.stringify(updated));
+    setEditingWeightId(null);
+  };
+
+  const deleteWeightEntry = () => {
+    const updated = weightHistory.filter(h => h.id !== editingWeightId);
+    setWeightHistory(updated);
+    localStorage.setItem("body_weight_logs", JSON.stringify(updated));
+    setEditingWeightId(null);
   };
 
   const liftProgressData = useMemo(() => {
@@ -138,7 +136,7 @@ export default function WorkoutPage() {
 
       {view === 'lift' && activeSubView === 'workout' && (
         <div className="space-y-6">
-          <div className="bg-zinc-900 rounded-[40px] p-8 border border-zinc-800 relative">
+          <div className="bg-zinc-900 rounded-[40px] p-8 border border-zinc-800">
             <h2 className="text-2xl font-black italic uppercase mb-8">{currentExercise.name}</h2>
             <div className="grid grid-cols-2 gap-4 mb-8">
               <div className="bg-black rounded-[28px] p-6 border border-zinc-800 text-center"><p className="text-[9px] font-black uppercase text-zinc-700 mb-2">weight</p><input type="number" value={weight} onChange={(e) => setWeight(e.target.value)} className="bg-transparent text-5xl font-black w-full text-center outline-none" placeholder="0" /></div>
@@ -156,52 +154,44 @@ export default function WorkoutPage() {
 
       {view === 'lift' && activeSubView === 'progress' && (
         <div className="bg-zinc-900 rounded-[40px] p-6 border border-zinc-800">
-          <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest italic mb-6 text-center">lift volume (kg x reps)</p>
+          <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest italic mb-6 text-center">{currentExercise.name} volume</p>
           <div className="h-[200px] w-full flex items-end justify-around gap-1 px-4">
-            {liftProgressData.map((d: any, i: number) => {
+            {liftProgressData.length === 0 ? <p className="text-[8px] uppercase text-zinc-600 font-black italic self-center">no data for this exercise</p> : liftProgressData.map((d: any) => {
               const max = Math.max(...liftProgressData.map((x: any) => x.val));
-              const height = (d.val / (max || 1)) * 100;
-              return <div key={d.id} className="bg-purple-600 w-full rounded-t-sm transition-all duration-500" style={{ height: `${Math.max(height, 5)}%` }} />;
+              return <div key={d.id} className="bg-purple-600 w-full rounded-t-sm" style={{ height: `${(d.val / (max || 1)) * 100}%` }} />;
             })}
           </div>
         </div>
       )}
 
       {view === 'history' && (
-        <div className="space-y-6">
-          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-            {currentPhase.days.map((day, idx) => (
-              <button key={idx} onClick={() => setHistoryDayIndex(idx)} className={`min-w-[90px] py-3 rounded-xl font-black uppercase text-[9px] border ${historyDayIndex === idx ? "bg-purple-600 border-purple-600" : "bg-zinc-900 text-zinc-500 border-zinc-800"}`}>{day.label}</button>
-            ))}
-          </div>
-          <div className="bg-zinc-900 rounded-[40px] p-6 border border-zinc-800">
-            {currentPhase.days[historyDayIndex].exercises.map((ex, exIdx) => {
-              const exKey = `w${selectedWeek}-${ex.name}`;
-              const sets = allWorkoutData[exKey] || [];
-              const isExpanded = expandedHistory === exKey;
-              return (
-                <div key={ex.name} className="border-b border-zinc-800 py-5 last:border-0 px-2">
-                  <div className="flex justify-between items-center">
-                    <p onClick={() => { setDayIndex(historyDayIndex); setExerciseIndex(exIdx); setView('lift'); setActiveSubView('workout'); }} className="text-[10px] font-black uppercase text-purple-400 italic cursor-pointer border-b border-purple-900">{ex.name}</p>
-                    <button onClick={() => setExpandedHistory(isExpanded ? null : exKey)} className="bg-zinc-800 w-8 h-8 rounded-full flex items-center justify-center text-xs">{isExpanded ? '▲' : '▼'}</button>
-                  </div>
-                  {isExpanded && (
-                    <div className="space-y-2 mt-4 transition-all">
-                      {sets.length === 0 ? <p className="text-[8px] uppercase text-zinc-600 font-black italic">no sets logged</p> : sets.map((s: any) => (
-                        <div key={s.id} className="flex justify-between bg-black/40 p-3 rounded-xl items-center border border-zinc-800/50">
-                          <span className="text-[10px] font-black italic">{s.weight}kg x {s.reps}</span>
-                          <div className="flex gap-2">
-                            <button onClick={() => editSet(exKey, s.id)} className="text-zinc-500 text-[8px] font-black uppercase bg-zinc-800 px-2 py-1 rounded">Edit</button>
-                            <button onClick={() => deleteSet(exKey, s.id)} className="text-red-500 text-[8px] font-black uppercase bg-red-500/10 px-2 py-1 rounded">Del</button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+        <div className="bg-zinc-900 rounded-[40px] p-6 border border-zinc-800">
+          {currentPhase.days[historyDayIndex].exercises.map((ex, exIdx) => {
+            const exKey = `w${selectedWeek}-${ex.name}`;
+            const sets = allWorkoutData[exKey] || [];
+            const isExpanded = expandedHistory === exKey;
+            return (
+              <div key={ex.name} className="border-b border-zinc-800 py-5 last:border-0">
+                <div className="flex justify-between items-center">
+                  <p onClick={() => { setDayIndex(historyDayIndex); setExerciseIndex(exIdx); setView('lift'); setActiveSubView('workout'); }} className="text-[10px] font-black uppercase text-purple-400 italic cursor-pointer border-b border-purple-900">{ex.name}</p>
+                  <button onClick={() => setExpandedHistory(isExpanded ? null : exKey)} className="bg-zinc-800 w-8 h-8 rounded-full flex items-center justify-center text-xs">{isExpanded ? '▲' : '▼'}</button>
                 </div>
-              );
-            })}
-          </div>
+                {isExpanded && (
+                  <div className="mt-4 space-y-2">
+                    {sets.map((s: any) => (
+                      <div key={s.id} className="flex justify-between bg-black/40 p-3 rounded-xl items-center">
+                        <span className="text-[10px] font-black italic">{s.weight}kg x {s.reps}</span>
+                        <div className="flex gap-2">
+                          <button onClick={() => editSet(exKey, s.id)} className="text-zinc-500 text-[8px] font-black uppercase">Edit</button>
+                          <button onClick={() => deleteSet(exKey, s.id)} className="text-red-500 text-[8px] font-black uppercase">Del</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -209,22 +199,35 @@ export default function WorkoutPage() {
         <div className="space-y-6">
           <div className="bg-zinc-900 rounded-[40px] p-6 border border-zinc-800">
             <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest italic mb-6 text-center">Body Weight Graph</p>
-            <div className="h-[220px] w-full mb-8">
-              <svg width="100%" height="100%" viewBox={`0 0 ${graphW} ${graphH}`} preserveAspectRatio="none" shapeRendering="geometricPrecision" style={{ overflow: 'visible' }}>
-                {weightHistory.length > 1 && <path d={bwLinePath} fill="none" stroke="#a855f7" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />}
-                {weightHistory.map((d, i) => (<circle key={d.id} cx={getX(i, weightHistory.length)} cy={getY(d.value, minW, maxW)} r="6" onClick={() => editWeightPoint(d.id)} className="fill-purple-500 stroke-[3px] stroke-black cursor-pointer active:scale-125 transition-transform" />))}
+            <div className="h-[200px] w-full mb-8 relative">
+              <svg width="100%" height="100%" viewBox={`0 0 ${graphW} ${graphH}`} preserveAspectRatio="none" style={{ overflow: 'visible' }}>
+                {weightHistory.length > 1 && <path d={bwLinePath} fill="none" stroke="#a855f7" strokeWidth="3" strokeLinecap="round" />}
+                {weightHistory.map((d, i) => (
+                  <circle key={d.id} cx={getX(i, weightHistory.length)} cy={getY(d.value, minW, maxW)} r="7" onClick={() => { setEditingWeightId(d.id); setEditWeightValue(d.value.toString()); }} className={`fill-purple-500 stroke-[3px] stroke-black cursor-pointer transition-all ${editingWeightId === d.id ? 'r-[10] fill-white' : ''}`} />
+                ))}
               </svg>
             </div>
             <div className="grid grid-cols-2 gap-2 mb-4">
               <input type="date" value={logDate} onChange={(e) => setLogDate(e.target.value)} className="bg-black p-4 rounded-2xl text-[10px] font-black border border-zinc-800 outline-none" />
               <input type="number" step="0.1" value={bodyWeightInput} onChange={(e) => setBodyWeightInput(e.target.value)} placeholder="0.0kg" className="bg-black p-4 rounded-2xl font-black text-xl border border-zinc-800 outline-none" />
             </div>
-            <button onClick={logBodyWeight} className="w-full bg-white text-black py-4 rounded-2xl font-black text-[11px] uppercase shadow-lg">log weight</button>
+            <button onClick={logBodyWeight} className="w-full bg-white text-black py-4 rounded-2xl font-black text-[11px] uppercase">log weight</button>
+            
+            {editingWeightId && (
+              <div className="mt-6 p-4 bg-black/40 border border-purple-500/30 rounded-3xl animate-in fade-in slide-in-from-top-2">
+                <p className="text-[8px] font-black uppercase text-purple-400 mb-3 tracking-widest text-center">Edit Selected Entry</p>
+                <div className="flex gap-2">
+                  <input type="number" value={editWeightValue} onChange={(e) => setEditWeightValue(e.target.value)} className="flex-1 bg-zinc-900 p-3 rounded-xl font-black text-lg outline-none" />
+                  <button onClick={updateWeightEntry} className="bg-purple-600 px-4 rounded-xl font-black text-[10px] uppercase">Update</button>
+                  <button onClick={deleteWeightEntry} className="bg-red-900/50 text-red-500 px-4 rounded-xl font-black text-[10px] uppercase">Del</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-[#0a0b0d]/95 backdrop-blur-xl border-t border-zinc-800 px-6 pt-5 pb-10 flex justify-around z-[100]">
+      <nav className="fixed bottom-0 left-0 right-0 bg-[#0a0b0d]/95 backdrop-blur-xl border-t border-zinc-800 px-6 pt-5 pb-10 flex justify-around">
         {[{id: 'lift', label: 'Workout'}, {id: 'history', label: 'History'}, {id: 'weight', label: 'Weight'}].map((v) => (
           <button key={v.id} onClick={() => setView(v.id as any)} className="flex flex-col items-center flex-1">
             <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${view === v.id ? "text-purple-400" : "text-zinc-600"}`}>{v.label}</span>
