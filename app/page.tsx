@@ -44,6 +44,16 @@ export default function WorkoutPage() {
     }
   }, [timer]);
 
+  const saveBaseline = () => {
+    const val = parseFloat(weight);
+    if (isNaN(val)) return;
+    const newBaselines = { ...baselines, [currentExercise.name]: val };
+    setBaselines(newBaselines);
+    localStorage.setItem("lift_baselines", JSON.stringify(newBaselines));
+    setShowBaselineInput(false);
+    setWeight("");
+  };
+
   const logSet = () => {
     if (!weight || !reps) return;
     const inputWeight = parseFloat(weight);
@@ -88,12 +98,12 @@ export default function WorkoutPage() {
   };
 
   // Graph Logic
-  const padding = { top: 20, right: 20, bottom: 20, left: 30 };
-  const graphH = 150;
-  const graphW = 320;
-  const weights = weightHistory.map(d => d.value);
-  const minW = weights.length ? Math.min(...weights) - 1 : 0;
-  const maxW = weights.length ? Math.max(...weights) + 1 : 10;
+  const padding = { top: 20, right: 20, bottom: 20, left: 35 };
+  const graphH = 180;
+  const graphW = 350;
+  const weightsArr = weightHistory.map(d => d.value);
+  const minW = weightsArr.length ? Math.min(...weightsArr) - 2 : 0;
+  const maxW = weightsArr.length ? Math.max(...weightsArr) + 2 : 10;
   
   const getX = (i: number) => padding.left + (i * (graphW - padding.left - padding.right) / (weightHistory.length - 1 || 1));
   const getY = (v: number) => graphH - padding.bottom - ((v - minW) / (maxW - minW || 1) * (graphH - padding.top - padding.bottom));
@@ -103,28 +113,29 @@ export default function WorkoutPage() {
     <div className="max-w-[100vw] overflow-x-hidden min-h-screen bg-[#0a0b0d] text-white font-sans pb-44 px-5">
       {showConfetti && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-purple-500/10 backdrop-blur-sm">
-          <p className="text-4xl font-black italic text-amber-400 animate-bounce">NEW PB! 🚀</p>
+          <p className="text-4xl font-black italic text-amber-400 animate-bounce tracking-tighter text-center">NEW PB! 🚀</p>
         </div>
       )}
 
       {timer > 0 && (
-        <div className="fixed top-0 left-0 right-0 bg-purple-600 z-[150] p-4 flex justify-between items-center border-b border-purple-400">
-          <span className="font-black italic">REST: {Math.floor(timer / 60)}:{(timer % 60).toString().padStart(2, '0')}</span>
+        <div className="fixed top-0 left-0 right-0 bg-purple-600 z-[150] p-4 flex justify-between items-center border-b border-purple-400 shadow-xl">
+          <span className="font-black italic text-sm tabular-nums tracking-tighter">REST: {Math.floor(timer / 60)}:{(timer % 60).toString().padStart(2, '0')}</span>
           <div className="flex gap-2">
-            <button onClick={() => setTimer(t => t + 30)} className="bg-white/20 px-3 py-1 rounded-lg text-[10px] font-black">+30s</button>
-            <button onClick={() => setTimer(0)} className="bg-white text-black px-3 py-1 rounded-lg text-[10px] font-black">SKIP</button>
+            <button onClick={() => setTimer(t => t + 30)} className="bg-white/20 px-3 py-1 rounded-lg text-[10px] font-black uppercase">+30s</button>
+            <button onClick={() => setTimer(t => t + 60)} className="bg-white/20 px-3 py-1 rounded-lg text-[10px] font-black uppercase">+1m</button>
+            <button onClick={() => setTimer(0)} className="bg-white text-black px-3 py-1 rounded-lg text-[10px] font-black uppercase">SKIP</button>
           </div>
         </div>
       )}
 
       <header className="pt-12 mb-6">
         <div className="flex justify-between items-center mb-4">
-          <h1 className="text-3xl font-black italic uppercase tracking-tighter">{view}</h1>
-          <button onClick={() => setShowOptions(!showOptions)} className="text-zinc-600 text-xs font-black">OPTIONS</button>
+          <h1 className="text-3xl font-black italic uppercase tracking-tighter">{view === 'weight' ? 'Body' : view}</h1>
+          <button onClick={() => setShowOptions(!showOptions)} className="text-zinc-700 text-[10px] font-black tracking-widest uppercase">Options</button>
         </div>
 
         {showOptions && (
-          <div className="bg-zinc-900 p-4 rounded-2xl border border-zinc-800 mb-4 flex justify-between">
+          <div className="bg-zinc-900 p-4 rounded-2xl border border-zinc-800 mb-4 flex justify-between items-center animate-in slide-in-from-top-2">
             <button onClick={resetAll} className="text-red-500 text-[10px] font-black uppercase">Reset All Data</button>
             <button onClick={() => setShowOptions(false)} className="text-zinc-500 text-[10px] font-black uppercase">Close</button>
           </div>
@@ -139,51 +150,49 @@ export default function WorkoutPage() {
 
       {view === 'lift' && (
         <div className="space-y-6">
-          <div className="flex gap-2 overflow-x-auto no-scrollbar">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
             {currentPhase.days.map((day, idx) => (
-              <button key={idx} onClick={() => { setDayIndex(idx); setExerciseIndex(0); }} className={`min-w-[90px] py-3 rounded-xl font-black uppercase text-[9px] border ${dayIndex === idx ? "bg-white text-black" : "bg-zinc-900 text-zinc-500 border-zinc-800"}`}>{day.label}</button>
+              <button key={idx} onClick={() => { setDayIndex(idx); setExerciseIndex(0); }} className={`min-w-[90px] py-3 rounded-xl font-black uppercase text-[9px] border transition-all ${dayIndex === idx ? "bg-white text-black border-white" : "bg-zinc-900 text-zinc-500 border-zinc-800"}`}>{day.label}</button>
             ))}
           </div>
 
-          <div className="bg-zinc-900 rounded-[40px] p-8 border border-zinc-800 relative">
+          <div className="bg-zinc-900 rounded-[40px] p-8 border border-zinc-800 shadow-2xl relative">
             <div className="flex justify-between items-start mb-8">
               <h2 className="text-2xl font-black italic uppercase tracking-tighter leading-tight max-w-[180px]">{currentExercise.name}</h2>
-              <button onClick={() => setShowBaselineInput(!showBaselineInput)} className="bg-zinc-800 px-3 py-2 rounded-xl text-[9px] font-black uppercase text-zinc-500 border border-zinc-700">
+              <button onClick={() => setShowBaselineInput(!showBaselineInput)} className="bg-zinc-800 px-3 py-2 rounded-xl text-[8px] font-black uppercase text-zinc-400 border border-zinc-700">
                 PB: {baselines[currentExercise.name] || 0}kg
               </button>
             </div>
 
             {showBaselineInput && (
-              <div className="mb-6 flex gap-2">
-                <input type="number" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="New PB" className="flex-1 bg-black p-3 rounded-xl text-sm outline-none" />
-                <button onClick={saveBaseline} className="bg-purple-500 px-4 rounded-xl font-black text-[10px]">SET</button>
+              <div className="mb-6 flex gap-2 animate-in slide-in-from-top-2">
+                <input type="number" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="0" className="flex-1 bg-black p-3 rounded-xl text-sm outline-none border border-zinc-800 font-black" />
+                <button onClick={saveBaseline} className="bg-purple-500 px-4 rounded-xl font-black text-[10px] uppercase">Set</button>
               </div>
             )}
 
             <div className="grid grid-cols-2 gap-4 mb-8">
               <div className="bg-black rounded-[28px] p-6 border border-zinc-800 text-center">
-                <p className="text-[9px] font-black uppercase text-zinc-700 mb-2">Weight</p>
-                <input type="number" value={weight} onChange={(e) => setWeight(e.target.value)} className="bg-transparent text-5xl font-black w-full text-center outline-none" placeholder="0" />
+                <p className="text-[9px] font-black uppercase text-zinc-700 mb-2 tracking-widest">Weight</p>
+                <input type="number" value={weight} onChange={(e) => setWeight(e.target.value)} className="bg-transparent text-5xl font-black w-full text-center outline-none tabular-nums" placeholder="0" />
               </div>
               <div className="bg-black rounded-[28px] p-6 border border-zinc-800 text-center">
-                <p className="text-[9px] font-black uppercase text-zinc-700 mb-2">Reps</p>
-                <input type="number" value={reps} onChange={(e) => setReps(e.target.value)} className="bg-transparent text-5xl font-black w-full text-center text-purple-400 outline-none" placeholder="0" />
+                <p className="text-[9px] font-black uppercase text-zinc-700 mb-2 tracking-widest">Reps</p>
+                <input type="number" value={reps} onChange={(e) => setReps(e.target.value)} className="bg-transparent text-5xl font-black w-full text-center text-purple-400 outline-none tabular-nums" placeholder="0" />
               </div>
             </div>
 
-            <div className="mb-6">
-              <div className="flex gap-2">
-                <input value={noteInput} onChange={(e) => setNoteInput(e.target.value)} placeholder={allWorkoutData[exerciseNoteKey] || "Add note..."} className="flex-1 bg-black/50 p-3 rounded-xl text-[10px] outline-none border border-zinc-800" />
-                <button onClick={saveNote} className="bg-zinc-800 px-4 rounded-xl text-[8px] font-black uppercase">Save</button>
-              </div>
+            <div className="mb-6 flex gap-2">
+              <input value={noteInput} onChange={(e) => setNoteInput(e.target.value)} placeholder={allWorkoutData[exerciseNoteKey] || "Exercise note..."} className="flex-1 bg-black/50 p-4 rounded-xl text-[10px] outline-none border border-zinc-800 font-bold" />
+              <button onClick={saveNote} className="bg-zinc-800 px-4 rounded-xl text-[8px] font-black uppercase border border-zinc-700">Save</button>
             </div>
 
-            <button onClick={logSet} className="w-full bg-white text-black py-5 rounded-2xl font-black uppercase text-[11px] tracking-widest active:scale-95 transition-all">Log Set</button>
+            <button onClick={logSet} className="w-full bg-white text-black py-6 rounded-3xl font-black uppercase text-[12px] tracking-[0.2em] active:scale-95 transition-all shadow-lg">Log Set</button>
           </div>
 
           <div className="flex justify-between items-center bg-zinc-900/50 p-2 rounded-2xl border border-zinc-800/50">
             <button onClick={() => setExerciseIndex(i => Math.max(0, i-1))} className="p-4 font-black text-zinc-600 disabled:opacity-0" disabled={exerciseIndex === 0}>PREV</button>
-            <span className="text-[10px] font-black text-zinc-800">{exerciseIndex + 1} / {currentDay.exercises.length}</span>
+            <span className="text-[10px] font-black text-zinc-800 tracking-widest">{exerciseIndex + 1} / {currentDay.exercises.length}</span>
             <button onClick={() => setExerciseIndex(i => Math.min(currentDay.exercises.length-1, i+1))} className="p-4 font-black text-purple-500 disabled:opacity-0" disabled={exerciseIndex === currentDay.exercises.length-1}>NEXT</button>
           </div>
         </div>
@@ -193,20 +202,20 @@ export default function WorkoutPage() {
         <div className="space-y-6">
           <div className="flex gap-2 overflow-x-auto no-scrollbar">
             {currentPhase.days.map((day, idx) => (
-              <button key={idx} onClick={() => setHistoryDayIndex(idx)} className={`min-w-[90px] py-3 rounded-xl font-black uppercase text-[9px] border ${historyDayIndex === idx ? "bg-purple-600 border-purple-600" : "bg-zinc-900 text-zinc-500 border-zinc-800"}`}>{day.label}</button>
+              <button key={idx} onClick={() => setHistoryDayIndex(idx)} className={`min-w-[90px] py-3 rounded-xl font-black uppercase text-[9px] border transition-all ${historyDayIndex === idx ? "bg-purple-600 border-purple-600" : "bg-zinc-900 text-zinc-500 border-zinc-800"}`}>{day.label}</button>
             ))}
           </div>
           <div className="bg-zinc-900 rounded-[40px] p-6 border border-zinc-800 min-h-[400px]">
             {currentPhase.days[historyDayIndex].exercises.map((ex, exIdx) => {
               const sets = allWorkoutData[`w${selectedWeek}-${ex.name}`] || [];
               return (
-                <div key={ex.name} onClick={() => { setDayIndex(historyDayIndex); setExerciseIndex(exIdx); setView('lift'); }} className="border-b border-zinc-800 py-4 last:border-0 active:bg-white/5 transition-colors rounded-xl px-2">
-                  <p className="text-[10px] font-black uppercase text-zinc-500 mb-2">{ex.name}</p>
+                <div key={ex.name} onClick={() => { setDayIndex(historyDayIndex); setExerciseIndex(exIdx); setView('lift'); }} className="border-b border-zinc-800 py-5 last:border-0 active:bg-white/5 transition-all rounded-xl px-2">
+                  <p className="text-[10px] font-black uppercase text-zinc-600 mb-3 tracking-widest">{ex.name}</p>
                   <div className="flex flex-wrap gap-2">
-                    {sets.map((s: any, i: number) => (
-                      <span key={s.id} className="bg-black px-3 py-1 rounded-lg text-[10px] font-black">{s.weight}kg × {s.reps}</span>
+                    {sets.map((s: any) => (
+                      <span key={s.id} className="bg-black/60 px-3 py-2 rounded-lg text-[10px] font-black italic border border-zinc-800">{s.weight}kg × {s.reps}</span>
                     ))}
-                    {sets.length === 0 && <span className="text-[10px] text-zinc-700 italic">No sets logged</span>}
+                    {sets.length === 0 && <span className="text-[10px] text-zinc-800 italic uppercase">Empty</span>}
                   </div>
                 </div>
               );
@@ -218,30 +227,38 @@ export default function WorkoutPage() {
       {view === 'weight' && (
         <div className="space-y-6">
           <div className="bg-zinc-900 rounded-[40px] p-6 border border-zinc-800">
-            <div className="h-[150px] w-full mb-6 relative">
-              <svg width="100%" height="100%" viewBox={`0 0 ${graphW} ${graphH}`}>
-                {weightHistory.length > 1 && <path d={linePath} fill="none" stroke="#a855f7" strokeWidth="3" />}
+            <div className="h-[180px] w-full mb-8 relative">
+              <svg width="100%" height="100%" viewBox={`0 0 ${graphW} ${graphH}`} preserveAspectRatio="none">
+                {weightHistory.length > 1 && <path d={linePath} fill="none" stroke="#a855f7" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />}
                 {weightHistory.map((d, i) => (
-                  <circle key={d.id} cx={getX(i)} cy={getY(d.value)} r="4" className="fill-purple-500" />
+                  <circle key={d.id} cx={getX(i)} cy={getY(d.value)} r="5" className="fill-purple-500 stroke-[4px] stroke-black" />
                 ))}
               </svg>
             </div>
-            <div className="flex gap-2 mb-6">
-              <input type="date" value={logDate} onChange={(e) => setLogDate(e.target.value)} className="bg-black p-4 rounded-xl text-[10px] font-black uppercase outline-none" />
-              <input type="number" step="0.1" value={bodyWeightInput} onChange={(e) => setBodyWeightInput(e.target.value)} placeholder="kg" className="flex-1 bg-black p-4 rounded-xl outline-none font-black text-xl" />
-              <button onClick={logBodyWeight} className="bg-white text-black px-6 rounded-xl font-black text-[10px] uppercase">Log</button>
+            
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              <div className="flex flex-col gap-1">
+                <label className="text-[8px] font-black text-zinc-700 uppercase ml-2">Date</label>
+                <input type="date" value={logDate} onChange={(e) => setLogDate(e.target.value)} className="bg-black p-4 rounded-2xl text-[10px] font-black uppercase outline-none border border-zinc-800" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[8px] font-black text-zinc-700 uppercase ml-2">Weight (kg)</label>
+                <input type="number" step="0.1" value={bodyWeightInput} onChange={(e) => setBodyWeightInput(e.target.value)} placeholder="00.0" className="bg-black p-4 rounded-2xl outline-none font-black text-xl border border-zinc-800" />
+              </div>
             </div>
-            <div className="space-y-2 max-h-[200px] overflow-y-auto">
+            <button onClick={logBodyWeight} className="w-full bg-white text-black py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest mb-8 shadow-lg">Log Weight</button>
+            
+            <div className="space-y-2 max-h-[250px] overflow-y-auto no-scrollbar">
               {weightHistory.slice().reverse().map(h => (
-                <div key={h.id} className="flex justify-between items-center bg-black/40 p-4 rounded-xl border border-zinc-800/50 group">
-                  <span className="text-[10px] font-black text-zinc-600 uppercase">{h.date}</span>
-                  <div className="flex items-center gap-4">
-                    <span className="font-black italic">{h.value}kg</span>
+                <div key={h.id} className="flex justify-between items-center bg-black/40 p-5 rounded-2xl border border-zinc-800/50">
+                  <span className="text-[10px] font-black text-zinc-600 uppercase tracking-widest">{h.date}</span>
+                  <div className="flex items-center gap-6">
+                    <span className="font-black italic text-xl tabular-nums">{h.value}kg</span>
                     <button onClick={() => {
                       const updated = weightHistory.filter(x => x.id !== h.id);
                       setWeightHistory(updated);
                       localStorage.setItem("body_weight_logs", JSON.stringify(updated));
-                    }} className="text-red-900 text-[10px] font-black">×</button>
+                    }} className="text-red-500 bg-red-500/10 w-8 h-8 rounded-lg font-black flex items-center justify-center">×</button>
                   </div>
                 </div>
               ))}
@@ -251,10 +268,14 @@ export default function WorkoutPage() {
       )}
 
       <nav className="fixed bottom-0 left-0 right-0 bg-[#0a0b0d]/95 backdrop-blur-xl border-t border-zinc-800 px-6 pt-5 pb-10 flex justify-around z-50">
-        {['lift', 'history', 'weight'].map((v) => (
-          <button key={v} onClick={() => setView(v as any)} className="flex flex-col items-center flex-1">
-            <span className={`text-[10px] font-black uppercase tracking-widest ${view === v ? "text-purple-400" : "text-zinc-600"}`}>{v === 'lift' ? 'Workout' : v === 'weight' ? 'Body' : v}</span>
-            {view === v && <div className="mt-2 w-1.5 h-1.5 rounded-full bg-purple-500" />}
+        {[
+          {id: 'lift', label: 'Workout'},
+          {id: 'history', label: 'History'},
+          {id: 'weight', label: 'Body'}
+        ].map((v) => (
+          <button key={v.id} onClick={() => setView(v.id as any)} className="flex flex-col items-center flex-1 transition-all active:scale-90">
+            <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${view === v.id ? "text-purple-400" : "text-zinc-600"}`}>{v.label}</span>
+            {view === v.id && <div className="mt-2 w-1.5 h-1.5 rounded-full bg-purple-500 shadow-[0_0_12px_rgba(168,85,247,0.8)]" />}
           </button>
         ))}
       </nav>
