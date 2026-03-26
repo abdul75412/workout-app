@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+@layer base {
+  /* hides up/down arrows on number inputs */
+  input::-webkit-outer-spin-button,
+  input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  input[type=number] {
+    -moz-appearance: textfield;
+  }
+
+  body {
+    @apply bg-black text-white selection:bg-lime-400 selection:text-black antialiased;
+  }
+
+  /* scrollbar hider for the day selector */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
