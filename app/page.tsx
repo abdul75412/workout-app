@@ -181,7 +181,7 @@ export default function WorkoutPage() {
   const totalChange = (actualWeight - firstWeight).toFixed(1);
 
   return (
-    <div className="max-w-[100vw] overflow-hidden min-h-screen bg-[#0a0b0d] text-white font-sans selection:bg-purple-500/30">
+    <div className="max-w-[100vw] overflow-x-hidden min-h-screen bg-[#0a0b0d] text-white font-sans selection:bg-purple-500/30 pb-40">
       {showConfetti && (
         <div className="fixed inset-0 pointer-events-none z-[200] flex items-center justify-center bg-purple-500/10 backdrop-blur-sm animate-in fade-in duration-500">
           <div className="text-center animate-bounce">
@@ -251,7 +251,6 @@ export default function WorkoutPage() {
         <main className="relative">
           <div className={`flex transition-transform duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${view === 'history' ? '-translate-x-full' : view === 'weight' ? '-translate-x-[200%]' : 'translate-x-0'}`}>
             
-            {/* LIFT VIEW */}
             <div className="min-w-full">
               <div className="mb-2">
                  <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 px-1">
@@ -330,7 +329,6 @@ export default function WorkoutPage() {
               </div>
             </div>
 
-            {/* HISTORY VIEW */}
             <div className="min-w-full">
               <div className="mb-6">
                  <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 px-1">
@@ -376,7 +374,6 @@ export default function WorkoutPage() {
               </div>
             </div>
 
-            {/* WEIGHT VIEW */}
             <div className="min-w-full">
               <div className="bg-zinc-900 border border-zinc-800 rounded-[32px] p-5 mb-4 grid grid-cols-2 gap-px bg-zinc-800/20">
                   <div className="bg-zinc-900 text-center py-4"><p className="text-[8px] font-black text-zinc-600 uppercase mb-2 tracking-widest">Current</p><p className="text-3xl font-black italic tabular-nums">{actualWeight}<span className="text-[11px] not-italic ml-1 text-zinc-500">kg</span></p></div>
@@ -414,7 +411,7 @@ export default function WorkoutPage() {
           </div>
         </main>
 
-        <nav className="fixed bottom-8 left-8 right-8 bg-zinc-900/80 backdrop-blur-3xl rounded-[40px] py-5 px-2 flex justify-around border border-zinc-800 shadow-2xl z-50">
+        <nav className="fixed bottom-0 left-0 right-0 bg-[#0a0b0d]/95 backdrop-blur-xl border-t border-zinc-800 px-6 pt-5 pb-[calc(env(safe-area-inset-bottom)+20px)] flex justify-around z-50">
           {[{ id: 'lift', label: 'WORKOUT' }, { id: 'history', label: 'HISTORY' }, { id: 'weight', label: 'BODY' }].map((nav) => (
             <button key={nav.id} onClick={() => setView(nav.id as any)} className="relative flex-1 flex flex-col items-center group">
               <span className={`text-[10px] font-black uppercase tracking-[0.3em] transition-all duration-300 ${view === nav.id ? "text-purple-400" : "text-zinc-600 group-active:text-zinc-400"}`}>{nav.label}</span>
