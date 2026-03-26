@@ -391,7 +391,7 @@ export default function WorkoutPage() {
                       const val = maxW - ((maxW - minW) / 4) * i;
                       return (<g key={i}><line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="#18181b" strokeWidth="1" strokeDasharray="4 4" /><text x={padding.left - 10} y={y + 3} textAnchor="end" className="fill-zinc-700 text-[9px] font-black italic">{val.toFixed(0)}</text></g>);
                     })}
-                    {weightHistory.length >= 2 && <path d={linePath} fill="none" stroke="#a855f7" strokeWidth="4" strokeLinecap="round" strokeJoin="round" className="drop-shadow-[0_0_12px_rgba(168,85,247,0.5)]" />}
+                    {weightHistory.length >= 2 && <path d={linePath} fill="none" stroke="#a855f7" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" className="drop-shadow-[0_0_12px_rgba(168,85,247,0.5)]" />}
                     {weightHistory.map((d, i) => (<g key={d.id} onClick={() => { setEditingId(d.id); setBodyWeightInput(d.value.toString()); setLogDate(d.rawDate); }}>
                       <circle cx={getX(i)} cy={getY(d.value)} r={editingId === d.id ? "6" : "5"} className={`fill-purple-500 transition-all ${editingId === d.id ? 'stroke-white stroke-2' : 'stroke-[#0a0b0d] stroke-2'}`} />
                     </g>))}
