@@ -17,10 +17,8 @@ export default function WorkoutPage() {
   const [weightHistory, setWeightHistory] = useState<{id: number, date: string, value: number, rawDate: string}[]>([]);
   const [timer, setTimer] = useState(0);
   const [allWorkoutData, setAllWorkoutData] = useState<any>({});
-  const [historyLog, setHistoryLog] = useState<string[]>([]); 
   const [expandedEx, setExpandedEx] = useState<string | null>(null);
   const [baselines, setBaselines] = useState<Record<string, number>>({});
-  const [showBaselineInput, setShowBaselineInput] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
 
   const currentPhase = workoutPlan.phase1;
@@ -32,11 +30,9 @@ export default function WorkoutPage() {
 
   useEffect(() => {
     const savedData = localStorage.getItem("gym_session_cache");
-    const savedHistory = localStorage.getItem("gym_history_grid");
     const savedWeightLogs = localStorage.getItem("body_weight_logs");
     const savedBaselines = localStorage.getItem("lift_baselines");
     if (savedData) setAllWorkoutData(JSON.parse(savedData));
-    if (savedHistory) setHistoryLog(JSON.parse(savedHistory));
     if (savedWeightLogs) setWeightHistory(JSON.parse(savedWeightLogs));
     if (savedBaselines) setBaselines(JSON.parse(savedBaselines));
   }, []);
@@ -71,6 +67,18 @@ export default function WorkoutPage() {
     const maxR = Math.max(...prevSets.map((s: any) => parseFloat(s.reps) || 0));
     return { weight: maxW, reps: maxR };
   }, [selectedWeek, currentExercise.name, allWorkoutData]);
+
+  const exerciseProgressData = useMemo(() => {
+    const progress: { week: number, maxWeight: number }[] = [];
+    for (let w = 1; w <= 12; w++) {
+      const sets = allWorkoutData[`w${w}-${currentExercise.name}`] || [];
+      if (sets.length > 0) {
+        const max = Math.max(...sets.map((s: any) => parseFloat(s.weight) || 0));
+        progress.push({ week: w, maxWeight: max });
+      }
+    }
+    return progress; 
+  }, [allWorkoutData, currentExercise.name]);
 
   const logSet = () => {
     if (!weight || !reps) return;
@@ -119,7 +127,7 @@ export default function WorkoutPage() {
   };
 
   return (
-    <div className="max-w-[100vw] overflow-hidden min-h-screen bg-[#0a0b0d] text-white font-sans selection:bg-purple-500/30 pb-40">
+    <div className="max-w-[100vw] overflow-hidden min-h-screen bg-[#0a0b0d] text-white font-sans pb-40">
       {showConfetti && (
         <div className="fixed inset-0 pointer-events-none z-[200] flex items-center justify-center bg-purple-500/10 backdrop-blur-sm">
           <div className="text-center animate-bounce"><p className="text-8xl mb-2">🔥</p><p className="text-2xl font-black italic uppercase text-white tracking-tighter">NEW PB DETECTED</p></div>
@@ -151,10 +159,16 @@ export default function WorkoutPage() {
                 ))}
               </div>
 
+              {/* Progress/Workout Toggle */}
+              <div className="flex gap-2 mb-4 bg-zinc-900/40 p-1 rounded-2xl border border-zinc-800">
+                <button onClick={() => setSubView("workout")} className={`flex-1 py-3 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all ${subView === 'workout' ? 'bg-zinc-800 text-white' : 'text-zinc-600'}`}>Workout</button>
+                <button onClick={() => setSubView("progress")} className={`flex-1 py-3 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all ${subView === 'progress' ? 'bg-zinc-800 text-white' : 'text-zinc-600'}`}>Progress</button>
+              </div>
+
               {timer > 0 && (
                 <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-4 mb-4 flex items-center justify-between animate-in slide-in-from-top-2">
                   <div className="flex flex-col">
-                    <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mb-1">Rest Timer</p>
+                    <p className="text-[8px] font-black text-zinc-600 uppercase mb-1">Rest Timer</p>
                     <p className="text-2xl font-black tabular-nums text-purple-500">{Math.floor(timer/60)}:{(timer%60).toString().padStart(2,'0')}</p>
                   </div>
                   <div className="flex gap-2">
@@ -173,15 +187,34 @@ export default function WorkoutPage() {
                     <button className="text-purple-400 font-black italic text-lg">{globalPBs[currentExercise.name] || 0}kg</button>
                   </div>
                 </div>
-                <div className="space-y-6">
-                    {lastWeekData && <div className="bg-purple-500/5 border border-purple-500/20 rounded-2xl p-3 flex justify-between items-center"><span className="text-[9px] font-black uppercase text-purple-400">Last Week</span><span className="text-xs font-black italic">{lastWeekData.weight}kg x {lastWeekData.reps}</span></div>}
+
+                {subView === "workout" ? (
+                  <div className="space-y-6">
+                    {lastWeekData && (
+                      <div className="bg-purple-500/5 border border-purple-500/20 rounded-2xl p-4 flex justify-between items-center">
+                        <span className="text-[10px] font-black uppercase text-purple-400">Target (Last Week)</span>
+                        <span className="text-sm font-black italic">{lastWeekData.weight}kg x {lastWeekData.reps}r</span>
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 gap-4">
                       <div className="bg-black rounded-[28px] p-5 border border-zinc-800 text-center"><p className="text-[8px] font-black uppercase text-zinc-700 mb-2">Weight</p><input type="number" value={weight} onChange={(e) => setWeight(e.target.value)} className="bg-transparent text-5xl font-black w-full text-center outline-none" placeholder="0" /></div>
                       <div className="bg-black rounded-[28px] p-5 border border-zinc-800 text-center"><p className="text-[8px] font-black uppercase text-zinc-700 mb-2">Reps</p><input type="number" value={reps} onChange={(e) => setReps(e.target.value)} className="bg-transparent text-5xl font-black w-full text-center text-purple-400 outline-none" placeholder="0" /></div>
                     </div>
                     <button onClick={logSet} className="w-full bg-white text-black py-5 rounded-2xl font-black uppercase text-[11px] tracking-[0.4em]">Log Set</button>
-                </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {exerciseProgressData.map((p, i) => (
+                      <div key={i} className="flex justify-between items-center bg-black/40 p-4 rounded-2xl border border-zinc-800">
+                        <span className="text-[10px] font-black text-zinc-500 uppercase">Week {p.week}</span>
+                        <span className="font-black italic text-purple-400">{p.maxWeight}kg</span>
+                      </div>
+                    ))}
+                    {exerciseProgressData.length === 0 && <p className="text-center text-zinc-700 uppercase font-black text-[10px] mt-10">No progress data yet</p>}
+                  </div>
+                )}
               </div>
+
               <div className="flex justify-between items-center mt-4 px-2">
                 <button onClick={() => setExerciseIndex(i => Math.max(0, i-1))} disabled={exerciseIndex === 0} className="p-2 text-zinc-700 disabled:opacity-0"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4"><path d="m15 18-6-6 6-6"/></svg></button>
                 <span className="text-[10px] font-black text-zinc-700 uppercase">{exerciseIndex + 1} / {currentDay.exercises.length}</span>
@@ -212,7 +245,7 @@ export default function WorkoutPage() {
                             </div>
                         </button>
                         {isExpanded && (
-                          <div className="space-y-2 mt-4 animate-in slide-in-from-top-1">
+                          <div className="space-y-2 mt-4">
                             {sets.length > 0 ? sets.map((s: any, i: number) => (
                                 <div key={i} className="flex justify-between items-center bg-black/40 p-3 rounded-xl border border-zinc-800">
                                     <div className="flex flex-col">
