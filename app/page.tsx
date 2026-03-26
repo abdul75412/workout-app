@@ -68,17 +68,20 @@ export default function WorkoutPage() {
     return { weight: maxW, reps: maxR };
   }, [selectedWeek, currentExercise.name, allWorkoutData]);
 
+  // Updated to show only current week and previous week
   const exerciseProgressData = useMemo(() => {
     const progress: { week: number, maxWeight: number }[] = [];
-    for (let w = 1; w <= 12; w++) {
+    const weeksToShow = selectedWeek === 1 ? [1] : [selectedWeek, selectedWeek - 1];
+    
+    weeksToShow.forEach(w => {
       const sets = allWorkoutData[`w${w}-${currentExercise.name}`] || [];
       if (sets.length > 0) {
         const max = Math.max(...sets.map((s: any) => parseFloat(s.weight) || 0));
         progress.push({ week: w, maxWeight: max });
       }
-    }
+    });
     return progress; 
-  }, [allWorkoutData, currentExercise.name]);
+  }, [allWorkoutData, currentExercise.name, selectedWeek]);
 
   const logSet = () => {
     if (!weight || !reps) return;
@@ -159,7 +162,6 @@ export default function WorkoutPage() {
                 ))}
               </div>
 
-              {/* Progress/Workout Toggle */}
               <div className="flex gap-2 mb-4 bg-zinc-900/40 p-1 rounded-2xl border border-zinc-800">
                 <button onClick={() => setSubView("workout")} className={`flex-1 py-3 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all ${subView === 'workout' ? 'bg-zinc-800 text-white' : 'text-zinc-600'}`}>Workout</button>
                 <button onClick={() => setSubView("progress")} className={`flex-1 py-3 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all ${subView === 'progress' ? 'bg-zinc-800 text-white' : 'text-zinc-600'}`}>Progress</button>
@@ -205,12 +207,12 @@ export default function WorkoutPage() {
                 ) : (
                   <div className="space-y-3">
                     {exerciseProgressData.map((p, i) => (
-                      <div key={i} className="flex justify-between items-center bg-black/40 p-4 rounded-2xl border border-zinc-800">
-                        <span className="text-[10px] font-black text-zinc-500 uppercase">Week {p.week}</span>
-                        <span className="font-black italic text-purple-400">{p.maxWeight}kg</span>
+                      <div key={i} className={`flex justify-between items-center p-4 rounded-2xl border ${p.week === selectedWeek ? 'bg-purple-500/10 border-purple-500/30' : 'bg-black/40 border-zinc-800'}`}>
+                        <span className={`text-[10px] font-black uppercase ${p.week === selectedWeek ? 'text-purple-400' : 'text-zinc-500'}`}>Week {p.week}</span>
+                        <span className="font-black italic text-xl">{p.maxWeight}kg</span>
                       </div>
                     ))}
-                    {exerciseProgressData.length === 0 && <p className="text-center text-zinc-700 uppercase font-black text-[10px] mt-10">No progress data yet</p>}
+                    {exerciseProgressData.length === 0 && <p className="text-center text-zinc-700 uppercase font-black text-[10px] mt-10">No logs for this week or last</p>}
                   </div>
                 )}
               </div>
