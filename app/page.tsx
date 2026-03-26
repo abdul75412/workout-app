@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { workoutPlan } from "./workoutData";
 
 export default function WorkoutPage() {
@@ -80,7 +80,11 @@ export default function WorkoutPage() {
 
   useEffect(() => {
     let interval: any;
-    if (timer > 0) interval = setInterval(() => setTimer((t) => t - 1), 1000);
+    if (timer > 0) {
+      interval = setInterval(() => {
+        setTimer((prev) => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+    }
     return () => clearInterval(interval);
   }, [timer]);
 
@@ -109,13 +113,14 @@ export default function WorkoutPage() {
     setShowOptions(false);
   };
 
-  const saveBaseline = (val: string) => {
-    const num = parseFloat(val);
+  const saveBaseline = () => {
+    const num = parseFloat(weight);
     if (isNaN(num)) return;
     const newBaselines = { ...baselines, [currentExercise.name]: num };
     setBaselines(newBaselines);
     localStorage.setItem("lift_baselines", JSON.stringify(newBaselines));
     setShowBaselineInput(false);
+    setWeight("");
   };
 
   const saveNote = () => {
@@ -129,20 +134,24 @@ export default function WorkoutPage() {
     if (!weight || !reps) return;
     const inputWeight = parseFloat(weight);
     const oldBest = globalPBs[currentExercise.name] || 0;
-    if (inputWeight >= oldBest + 10 && oldBest > 0) {
+    
+    if (inputWeight > oldBest && oldBest > 0) {
       setShowConfetti(true);
       setTimeout(() => setShowConfetti(false), 3000);
     }
+
     const newSets = [...currentSets, { weight, reps }];
     const updatedData = { ...allWorkoutData, [storageKey]: newSets };
     setAllWorkoutData(updatedData);
     localStorage.setItem("gym_session_cache", JSON.stringify(updatedData));
+    
     const logKey = `w${selectedWeek}-d${dayIndex + 1}`;
     if (!historyLog.includes(logKey)) {
         const newHistory = [...historyLog, logKey];
         setHistoryLog(newHistory);
         localStorage.setItem("gym_history_grid", JSON.stringify(newHistory));
     }
+    
     setWeight(""); setReps(""); 
     const isCompound = currentExercise.name.toLowerCase().includes("press") || currentExercise.name.toLowerCase().includes("squat");
     setTimer(isCompound ? 120 : 60);
@@ -186,7 +195,7 @@ export default function WorkoutPage() {
         <div className="fixed inset-0 pointer-events-none z-[200] flex items-center justify-center bg-purple-500/10 backdrop-blur-sm animate-in fade-in duration-500">
           <div className="text-center animate-bounce">
             <p className="text-8xl mb-2">🚀</p>
-            <p className="text-3xl font-black italic uppercase text-amber-400 tracking-tighter">HUGE +10KG PR</p>
+            <p className="text-3xl font-black italic uppercase text-amber-400 tracking-tighter">NEW PERSONAL BEST</p>
           </div>
         </div>
       )}
@@ -233,8 +242,9 @@ export default function WorkoutPage() {
 
       <div className="max-w-md mx-auto px-5">
         <header className="pt-8 mb-4 uppercase italic font-black">
-          <div className="flex justify-between items-center mb-6">
+          <div className="flex justify-between items-center mb-4">
             <h1 className="text-3xl tracking-tighter leading-none">{view === 'weight' ? 'Weight' : view === 'history' ? 'History' : 'Mesocycle 1'}</h1>
+            {timer > 0 && <div className="bg-purple-500 text-white px-3 py-1 rounded-full text-xs font-black tabular-nums animate-pulse">REST: {Math.floor(timer / 60)}:{(timer % 60).toString().padStart(2, '0')}</div>}
             <button onClick={() => setShowOptions(true)} className="p-2 text-zinc-700 active:text-white transition-colors">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
             </button>
@@ -279,12 +289,23 @@ export default function WorkoutPage() {
                           </button>
                       </div>
                   </div>
-                  <button onClick={() => setShowBaselineInput(!showBaselineInput)} className="bg-zinc-800 px-3 py-2 rounded-xl text-[8px] font-black uppercase text-zinc-500 tracking-widest border border-zinc-700/50">{baselines[currentExercise.name] ? `${baselines[currentExercise.name]}kg pb` : 'set pb'}</button>
+                  <button onClick={() => setShowBaselineInput(!showBaselineInput)} className={`px-3 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest border transition-all ${showBaselineInput ? 'bg-purple-500 text-white border-purple-400' : 'bg-zinc-800 text-zinc-500 border-zinc-700/50'}`}>
+                    {baselines[currentExercise.name] ? `${baselines[currentExercise.name]}kg pb` : 'set pb'}
+                  </button>
                 </div>
 
                 <div className="flex-1 relative overflow-hidden">
                   <div className={`flex transition-transform duration-500 ease-in-out h-full ${subView === "progress" ? "-translate-x-full" : "translate-x-0"}`}>
                       <div className="min-w-full">
+                          {showBaselineInput && (
+                            <div className="mb-4 bg-purple-500/10 border border-purple-500/20 p-4 rounded-2xl animate-in fade-in slide-in-from-top-2">
+                                <p className="text-[8px] font-black uppercase text-purple-400 mb-2 tracking-widest">Initial PB Weight</p>
+                                <div className="flex gap-2">
+                                    <input type="number" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="0" className="flex-1 bg-black rounded-xl p-3 text-lg font-black outline-none" />
+                                    <button onClick={saveBaseline} className="bg-purple-500 text-white px-6 rounded-xl font-black uppercase text-[9px]">Save</button>
+                                </div>
+                            </div>
+                          )}
                           {showNoteField && (
                               <div className="mb-4 animate-in slide-in-from-top-2 duration-300">
                                   <textarea value={noteInput} onChange={(e) => setNoteInput(e.target.value)} placeholder="note..." className="w-full bg-black border border-zinc-800 rounded-2xl p-4 text-[11px] font-bold italic outline-none min-h-[80px]" />
@@ -431,5 +452,3 @@ export default function WorkoutPage() {
         input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
       `}</style>
     </div>
-  );
-}
