@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { workoutPlan } from "./workoutData";
 
 export default function WorkoutPage() {
@@ -20,6 +20,7 @@ export default function WorkoutPage() {
   const [expandedEx, setExpandedEx] = useState<string | null>(null);
   const [baselines, setBaselines] = useState<Record<string, number>>({});
   const [showConfetti, setShowConfetti] = useState(false);
+  const [activeDotId, setActiveDotId] = useState<number | null>(null); // State to manage active graph action buttons
 
   const currentPhase = workoutPlan.phase1;
   const currentDay = currentPhase.days[dayIndex];
@@ -28,6 +29,7 @@ export default function WorkoutPage() {
   const currentSets = allWorkoutData[storageKey] || [];
   const historyDay = currentPhase.days[historyDayIndex];
 
+  // Load Data on Mount
   useEffect(() => {
     const savedData = localStorage.getItem("gym_session_cache");
     const savedWeightLogs = localStorage.getItem("body_weight_logs");
@@ -37,12 +39,14 @@ export default function WorkoutPage() {
     if (savedBaselines) setBaselines(JSON.parse(savedBaselines));
   }, []);
 
+  // Timer Logic
   useEffect(() => {
     let interval: any;
     if (timer > 0) interval = setInterval(() => setTimer((t) => t - 1), 1000);
     return () => clearInterval(interval);
   }, [timer]);
 
+  // Global PBs for celebration and card display
   const globalPBs = useMemo(() => {
     const bests: Record<string, number> = { ...baselines };
     Object.keys(allWorkoutData).forEach(key => {
@@ -58,6 +62,7 @@ export default function WorkoutPage() {
     return bests;
   }, [allWorkoutData, baselines]);
 
+  // Last Week Data Comparison for active workout card
   const lastWeekData = useMemo(() => {
     if (selectedWeek === 1) return null;
     const prevKey = `w${selectedWeek - 1}-${currentExercise.name}`;
@@ -68,7 +73,7 @@ export default function WorkoutPage() {
     return { weight: maxW, reps: maxR };
   }, [selectedWeek, currentExercise.name, allWorkoutData]);
 
-  // Updated to show only current week and previous week
+  // Exercise progression data for subview, filtered week-by-week
   const exerciseProgressData = useMemo(() => {
     const progress: { week: number, maxWeight: number }[] = [];
     const weeksToShow = selectedWeek === 1 ? [1] : [selectedWeek, selectedWeek - 1];
@@ -83,22 +88,28 @@ export default function WorkoutPage() {
     return progress; 
   }, [allWorkoutData, currentExercise.name, selectedWeek]);
 
+  // Log active workout set
   const logSet = () => {
     if (!weight || !reps) return;
     const inputWeight = parseFloat(weight);
     const oldBest = globalPBs[currentExercise.name] || 0;
+    
+    // Confetti logic: Check if new weight beats baseline PB
     if (inputWeight > oldBest && oldBest > 0) {
       setShowConfetti(true);
       setTimeout(() => setShowConfetti(false), 3000);
     }
+
     const newSets = [...currentSets, { weight, reps }].slice(0, 3);
     const updatedData = { ...allWorkoutData, [storageKey]: newSets };
     setAllWorkoutData(updatedData);
     localStorage.setItem("gym_session_cache", JSON.stringify(updatedData));
+    
     setWeight(""); setReps("");
-    setTimer(90);
+    setTimer(90); // Default rest timer is 90s
   };
 
+  // Delete set from historydropdown
   const deleteSet = (exKey: string, setIndex: number) => {
     const sets = [...(allWorkoutData[exKey] || [])];
     sets.splice(setIndex, 1);
@@ -107,14 +118,18 @@ export default function WorkoutPage() {
     localStorage.setItem("gym_session_cache", JSON.stringify(updatedData));
   };
 
+  // Body weight log logic (save or update)
   const logBodyWeight = () => {
     if (!bodyWeightInput) return;
     let updated;
+    const dateObj = new Date(logDate);
+    const formattedDate = dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' });
+    
     if (editingId) {
-      updated = weightHistory.map(log => log.id === editingId ? { ...log, value: parseFloat(bodyWeightInput), rawDate: logDate, date: new Date(logDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' }) } : log);
+      updated = weightHistory.map(log => log.id === editingId ? { ...log, value: parseFloat(bodyWeightInput), rawDate: logDate, date: formattedDate } : log);
       setEditingId(null);
     } else {
-      const newEntry = { id: Date.now(), date: new Date(logDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' }), value: parseFloat(bodyWeightInput), rawDate: logDate };
+      const newEntry = { id: Date.now(), date: formattedDate, value: parseFloat(bodyWeightInput), rawDate: logDate };
       updated = [...weightHistory, newEntry];
     }
     updated.sort((a, b) => new Date(a.rawDate).getTime() - new Date(b.rawDate).getTime());
@@ -127,12 +142,47 @@ export default function WorkoutPage() {
     const updated = weightHistory.filter(log => log.id !== id);
     setWeightHistory(updated);
     localStorage.setItem("body_weight_logs", JSON.stringify(updated));
+    setActiveDotId(null); // Clear dot state after delete
   };
+
+  // -----------------------------------------------------------------
+  // Interactive Purple Dot Graph Logic (RESTORED FROM PREVIOUS VER)
+  // -----------------------------------------------------------------
+  const svgRef = useRef<SVGSVGElement>(null);
+  const graphWidth = 340; // Approx based on mobile padding
+  const graphHeight = 150;
+  const padding = 20;
+
+  const yMin = useMemo(() => weightHistory.length > 0 ? Math.min(...weightHistory.map(d => d.value)) - 2 : 0, [weightHistory]);
+  const yMax = useMemo(() => weightHistory.length > 0 ? Math.max(...weightHistory.map(d => d.value)) + 2 : 100, [weightHistory]);
+  const totalDays = useMemo(() => {
+    if (weightHistory.length < 2) return 1;
+    const start = new Date(weightHistory[0].rawDate);
+    const end = new Date(weightHistory[weightHistory.length - 1].rawDate);
+    return Math.max(1, (end.getTime() - start.getTime()) / (1000 * 3600 * 24));
+  }, [weightHistory]);
+
+  const mapPoint = (value: number, rawDate: string, index: number) => {
+    const y = graphHeight - padding - ((value - yMin) / (yMax - yMin) * (graphHeight - 2 * padding));
+    let x;
+    if (weightHistory.length < 2) {
+      x = graphWidth / 2;
+    } else {
+      const currentDate = new Date(rawDate);
+      const startDate = new Date(weightHistory[0].rawDate);
+      const daysSinceStart = (currentDate.getTime() - startDate.getTime()) / (1000 * 3600 * 24);
+      x = padding + (daysSinceStart / totalDays * (graphWidth - 2 * padding));
+    }
+    return { x: isNaN(x) ? padding : x, y: isNaN(y) ? padding : y };
+  };
+
+  const points = useMemo(() => weightHistory.map((d, i) => ({ ...mapPoint(d.value, d.rawDate, i), id: d.id })), [weightHistory, yMin, yMax, totalDays]);
+  const polylinePoints = useMemo(() => points.map(p => `${p.x},${p.y}`).join(' '), [points]);
 
   return (
     <div className="max-w-[100vw] overflow-hidden min-h-screen bg-[#0a0b0d] text-white font-sans pb-40">
       {showConfetti && (
-        <div className="fixed inset-0 pointer-events-none z-[200] flex items-center justify-center bg-purple-500/10 backdrop-blur-sm">
+        <div className="fixed inset-0 pointer-events-none z-[200] flex items-center justify-center bg-purple-500/10 backdrop-blur-sm animate-in fade-in duration-500">
           <div className="text-center animate-bounce"><p className="text-8xl mb-2">🔥</p><p className="text-2xl font-black italic uppercase text-white tracking-tighter">NEW PB DETECTED</p></div>
         </div>
       )}
@@ -162,9 +212,10 @@ export default function WorkoutPage() {
                 ))}
               </div>
 
+              {/* Progress/Workout Toggle */}
               <div className="flex gap-2 mb-4 bg-zinc-900/40 p-1 rounded-2xl border border-zinc-800">
-                <button onClick={() => setSubView("workout")} className={`flex-1 py-3 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all ${subView === 'workout' ? 'bg-zinc-800 text-white' : 'text-zinc-600'}`}>Workout</button>
-                <button onClick={() => setSubView("progress")} className={`flex-1 py-3 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all ${subView === 'progress' ? 'bg-zinc-800 text-white' : 'text-zinc-600'}`}>Progress</button>
+                <button onClick={() => setSubView("workout")} className={`flex-1 py-3 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all ${subView === 'workout' ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-600'}`}>Workout</button>
+                <button onClick={() => setSubView("progress")} className={`flex-1 py-3 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all ${subView === 'progress' ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-600'}`}>Progress</button>
               </div>
 
               {timer > 0 && (
@@ -181,9 +232,9 @@ export default function WorkoutPage() {
                 </div>
               )}
 
-              <div className="bg-zinc-900 rounded-[40px] p-6 border border-zinc-800 min-h-[420px]">
+              <div className="bg-zinc-900 rounded-[40px] p-6 border border-zinc-800 min-h-[420px] shadow-2xl">
                 <div className="flex justify-between items-start mb-8">
-                  <h2 className="text-2xl font-black italic uppercase tracking-tighter max-w-[200px]">{currentExercise.name}</h2>
+                  <h2 className="text-2xl font-black italic uppercase leading-tight tracking-tighter max-w-[200px]">{currentExercise.name}</h2>
                   <div className="text-right">
                     <p className="text-[8px] font-black text-zinc-600 uppercase mb-1">Current PB</p>
                     <button className="text-purple-400 font-black italic text-lg">{globalPBs[currentExercise.name] || 0}kg</button>
@@ -193,23 +244,23 @@ export default function WorkoutPage() {
                 {subView === "workout" ? (
                   <div className="space-y-6">
                     {lastWeekData && (
-                      <div className="bg-purple-500/5 border border-purple-500/20 rounded-2xl p-4 flex justify-between items-center">
+                      <div className="bg-purple-500/5 border border-purple-500/20 rounded-2xl p-4 flex justify-between items-center animate-in fade-in slide-in-from-top-1">
                         <span className="text-[10px] font-black uppercase text-purple-400">Target (Last Week)</span>
-                        <span className="text-sm font-black italic">{lastWeekData.weight}kg x {lastWeekData.reps}r</span>
+                        <span className="text-sm font-black italic text-white">{lastWeekData.weight}kg x {lastWeekData.reps}r</span>
                       </div>
                     )}
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="bg-black rounded-[28px] p-5 border border-zinc-800 text-center"><p className="text-[8px] font-black uppercase text-zinc-700 mb-2">Weight</p><input type="number" value={weight} onChange={(e) => setWeight(e.target.value)} className="bg-transparent text-5xl font-black w-full text-center outline-none" placeholder="0" /></div>
-                      <div className="bg-black rounded-[28px] p-5 border border-zinc-800 text-center"><p className="text-[8px] font-black uppercase text-zinc-700 mb-2">Reps</p><input type="number" value={reps} onChange={(e) => setReps(e.target.value)} className="bg-transparent text-5xl font-black w-full text-center text-purple-400 outline-none" placeholder="0" /></div>
+                      <div className="bg-black rounded-[28px] p-5 border border-zinc-800 text-center"><p className="text-[8px] font-black uppercase text-zinc-700 mb-2">Weight</p><input type="number" value={weight} onChange={(e) => setWeight(e.target.value)} className="bg-transparent text-5xl font-black w-full text-center outline-none tabular-nums" placeholder="0" /></div>
+                      <div className="bg-black rounded-[28px] p-5 border border-zinc-800 text-center"><p className="text-[8px] font-black uppercase text-zinc-700 mb-2">Reps</p><input type="number" value={reps} onChange={(e) => setReps(e.target.value)} className="bg-transparent text-5xl font-black w-full text-center text-purple-400 outline-none tabular-nums" placeholder="0" /></div>
                     </div>
-                    <button onClick={logSet} className="w-full bg-white text-black py-5 rounded-2xl font-black uppercase text-[11px] tracking-[0.4em]">Log Set</button>
+                    <button onClick={logSet} className="w-full bg-white text-black py-5 rounded-2xl font-black uppercase text-[11px] tracking-[0.4em] active:scale-95 transition-all shadow-xl shadow-white/5">Log Set</button>
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-3 flex flex-col items-center">
                     {exerciseProgressData.map((p, i) => (
-                      <div key={i} className={`flex justify-between items-center p-4 rounded-2xl border ${p.week === selectedWeek ? 'bg-purple-500/10 border-purple-500/30' : 'bg-black/40 border-zinc-800'}`}>
+                      <div key={i} className={`flex justify-between items-center w-full p-4 rounded-2xl border transition-all ${p.week === selectedWeek ? 'bg-purple-500/10 border-purple-500/30 shadow-lg' : 'bg-black/40 border-zinc-800'}`}>
                         <span className={`text-[10px] font-black uppercase ${p.week === selectedWeek ? 'text-purple-400' : 'text-zinc-500'}`}>Week {p.week}</span>
-                        <span className="font-black italic text-xl">{p.maxWeight}kg</span>
+                        <span className={`font-black italic text-xl ${p.week === selectedWeek ? 'text-white' : 'text-zinc-300'}`}>{p.maxWeight}kg</span>
                       </div>
                     ))}
                     {exerciseProgressData.length === 0 && <p className="text-center text-zinc-700 uppercase font-black text-[10px] mt-10">No logs for this week or last</p>}
@@ -218,9 +269,9 @@ export default function WorkoutPage() {
               </div>
 
               <div className="flex justify-between items-center mt-4 px-2">
-                <button onClick={() => setExerciseIndex(i => Math.max(0, i-1))} disabled={exerciseIndex === 0} className="p-2 text-zinc-700 disabled:opacity-0"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4"><path d="m15 18-6-6 6-6"/></svg></button>
-                <span className="text-[10px] font-black text-zinc-700 uppercase">{exerciseIndex + 1} / {currentDay.exercises.length}</span>
-                <button onClick={() => setExerciseIndex(i => Math.min(currentDay.exercises.length-1, i+1))} disabled={exerciseIndex === currentDay.exercises.length-1} className="p-2 text-purple-500 disabled:opacity-0"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4"><path d="m9 18 6-6-6-6"/></svg></button>
+                <button onClick={() => setExerciseIndex(i => Math.max(0, i-1))} disabled={exerciseIndex === 0} className="p-2 text-zinc-700 disabled:opacity-0 transition-opacity"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4"><path d="m15 18-6-6 6-6"/></svg></button>
+                <span className="text-[10px] font-black text-zinc-700 uppercase tracking-widest">{exerciseIndex + 1} / {currentDay.exercises.length}</span>
+                <button onClick={() => setExerciseIndex(i => Math.min(currentDay.exercises.length-1, i+1))} disabled={exerciseIndex === currentDay.exercises.length-1} className="p-2 text-purple-500 disabled:opacity-0 transition-opacity"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4"><path d="m9 18 6-6-6-6"/></svg></button>
               </div>
             </div>
 
@@ -228,7 +279,7 @@ export default function WorkoutPage() {
             <div className="min-w-full">
               <div className="flex gap-2 overflow-x-auto no-scrollbar mb-6">
                 {currentPhase.days.map((day, idx) => (
-                  <button key={idx} onClick={() => setHistoryDayIndex(idx)} className={`flex-shrink-0 px-6 py-4 rounded-xl font-black uppercase text-[9px] tracking-widest border ${historyDayIndex === idx ? "bg-purple-600 border-purple-500 text-white" : "bg-zinc-900/40 text-zinc-600 border-zinc-800"}`}>{day.label}</button>
+                  <button key={idx} onClick={() => setHistoryDayIndex(idx)} className={`flex-shrink-0 px-6 py-4 rounded-xl font-black uppercase text-[9px] tracking-widest border transition-all ${historyDayIndex === idx ? "bg-purple-600 border-purple-500 text-white shadow-lg" : "bg-zinc-900/40 text-zinc-600 border-zinc-800"}`}>{day.label}</button>
                 ))}
               </div>
               <div className="bg-zinc-900/50 border rounded-[40px] p-6 border-zinc-800 min-h-[440px] max-h-[600px] overflow-y-auto no-scrollbar">
@@ -247,19 +298,19 @@ export default function WorkoutPage() {
                             </div>
                         </button>
                         {isExpanded && (
-                          <div className="space-y-2 mt-4">
+                          <div className="space-y-2 mt-4 animate-in slide-in-from-top-1 duration-200">
                             {sets.length > 0 ? sets.map((s: any, i: number) => (
-                                <div key={i} className="flex justify-between items-center bg-black/40 p-3 rounded-xl border border-zinc-800">
+                                <div key={i} className="flex justify-between items-center bg-black/40 p-3 rounded-xl border border-zinc-800 transition-all active:scale-[0.97]">
                                     <div className="flex flex-col">
                                         <p className="text-[7px] font-black text-zinc-700 uppercase">Set {i+1}</p>
-                                        <p className="text-[11px] font-black italic">{s.weight}kg <span className="text-purple-400 ml-1">{s.reps}reps</span></p>
+                                        <p className="text-[11px] font-black italic text-white">{s.weight}kg <span className="text-purple-400 ml-1">{s.reps}reps</span></p>
                                     </div>
                                     <div className="flex gap-1">
-                                        <button onClick={() => { setWeight(s.weight); setReps(s.reps); setView('lift'); setExerciseIndex(exIdx); }} className="p-2 text-zinc-600"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>
-                                        <button onClick={() => deleteSet(key, i)} className="p-2 text-red-900/40"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+                                        <button onClick={() => { setWeight(s.weight); setReps(s.reps); setView('lift'); setExerciseIndex(exIdx); }} className="p-2 text-zinc-600 active:text-white transition-colors"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>
+                                        <button onClick={() => deleteSet(key, i)} className="p-2 text-red-900/40 active:text-red-500 transition-colors"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
                                     </div>
                                 </div>
-                            )) : <p className="text-[9px] font-black uppercase text-zinc-800 text-center py-4 italic">No workout data</p>}
+                            )) : <p className="text-[9px] font-black uppercase text-zinc-800 text-center py-4 italic animate-pulse">No workout data</p>}
                           </div>
                         )}
                       </div>
@@ -269,22 +320,58 @@ export default function WorkoutPage() {
               </div>
             </div>
 
-            {/* WEIGHT VIEW */}
+            {/* WEIGHT VIEW (MODIFIED) */}
             <div className="min-w-full">
-              <div className="bg-zinc-900 border border-zinc-800 rounded-[40px] p-6 mb-4">
-                 <div className="flex gap-3 mb-4">
-                   <input type="date" value={logDate} onChange={(e) => setLogDate(e.target.value)} className="bg-black border border-zinc-800 rounded-2xl px-5 py-4 text-[10px] font-black text-zinc-500 flex-1 outline-none" />
-                   <input type="number" value={bodyWeightInput} onChange={(e) => setBodyWeightInput(e.target.value)} placeholder="0.0 kg" className="bg-black border border-zinc-800 rounded-2xl px-5 py-4 text-lg font-black italic outline-none w-32 text-center" />
+              <div className="bg-zinc-900 border border-zinc-800 rounded-[40px] p-6 mb-4 shadow-xl">
+                 <div className="flex gap-3 mb-4 flex-col sm:flex-row">
+                   <input type="date" value={logDate} onChange={(e) => setLogDate(e.target.value)} className="bg-black border border-zinc-800 rounded-2xl px-5 py-4 text-[11px] font-black text-white flex-1 outline-none shadow-inner" />
+                   <input type="number" value={bodyWeightInput} onChange={(e) => setBodyWeightInput(e.target.value)} placeholder="0.0 kg" className="bg-black border border-zinc-800 rounded-2xl px-5 py-4 text-2xl font-black italic outline-none w-full sm:w-32 text-center shadow-inner text-white tabular-nums" />
                  </div>
-                 <button onClick={logBodyWeight} className="w-full bg-white text-black py-5 rounded-2xl font-black uppercase text-[11px] tracking-[0.3em]">{editingId ? 'Update Log' : 'Save Log'}</button>
+                 <button onClick={logBodyWeight} className="w-full bg-white text-black py-5 rounded-2xl font-black uppercase text-[11px] tracking-[0.3em] active:scale-95 transition-all shadow-xl">{editingId ? 'Update Log' : 'Save Log'}</button>
               </div>
-              <div className="space-y-2">
+
+              {/* --------------------------------------------------------- */}
+              {/* INTERACTIVE GRAPH INTERFACE (RESTORED)                     */}
+              {/* --------------------------------------------------------- */}
+              <div className="bg-black border border-zinc-800 rounded-3xl p-5 mb-6 relative shadow-inner">
+                <p className="text-[9px] font-black uppercase text-zinc-700 mb-4 tracking-widest text-center">Progression</p>
+                {points.length > 0 ? (
+                  <div className="relative" style={{ height: `${graphHeight}px` }}>
+                    <svg ref={svgRef} width="100%" height={graphHeight} viewBox={`0 0 ${graphWidth} ${graphHeight}`} preserveAspectRatio="none">
+                      <polyline fill="none" stroke="#27272a" strokeWidth="1" points={`0,${padding} ${graphWidth},${padding}`} />
+                      <polyline fill="none" stroke="#27272a" strokeWidth="1" points={`0,${graphHeight - padding} ${graphWidth},${graphHeight - padding}`} />
+                      <polyline fill="none" stroke="rgba(168,85,247,0.3)" strokeWidth="3" points={polylinePoints} />
+                      {points.map(p => (
+                        <circle key={p.id} cx={p.x} cy={p.y} r="5" fill="#a855f7" stroke="#0a0b0d" strokeWidth="2" className="transition-all active:scale-125 hover:stroke-white cursor-pointer" />
+                      ))}
+                    </svg>
+                    {points.map(p => {
+                      const isActive = activeDotId === p.id;
+                      return (
+                        <div key={p.id} className="absolute w-[30px] h-[30px] z-10 -translate-x-1/2 -translate-y-1/2 group" style={{ left: `${p.x}px`, top: `${p.y}px` }}>
+                          <button onClick={() => setActiveDotId(isActive ? null : p.id)} className={`w-full h-full bg-transparent ${isActive ? 'ring-2 ring-purple-500 rounded-full' : ''}`} aria-label="dot options"></button>
+                          {isActive && (
+                            <div className="absolute top-[140%] left-1/2 -translate-x-1/2 bg-zinc-900 border border-zinc-800 rounded-lg p-1.5 flex gap-1 z-20 animate-in slide-in-from-top-1 shadow-2xl">
+                              <button onClick={() => { setEditingId(p.id); const log = weightHistory.find(l=>l.id===p.id); if(log){setBodyWeightInput(log.value.toString()); setLogDate(log.rawDate);} setActiveDotId(null); }} className="p-1.5 text-zinc-400 active:text-white"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>
+                              <button onClick={() => deleteWeight(p.id)} className="p-1.5 text-red-900 active:text-red-500"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                    <div className="flex items-center justify-center h-[150px] opacity-20"><p className="text-[10px] font-black uppercase tracking-[0.4em]">Empty Graph</p></div>
+                )}
+              </div>
+
+              {/* CLEAN LOGS LIST (REMOVED PICTURE ATTACHMENT ICONS) */}
+              <div className="space-y-3">
                 {weightHistory.slice().reverse().map(log => (
-                  <div key={log.id} className="flex justify-between items-center bg-zinc-900/40 p-4 rounded-2xl border border-zinc-800/50">
-                    <div className="flex flex-col"><span className="text-[10px] font-black text-zinc-600 uppercase">{log.date}</span><span className="font-black italic text-xl">{log.value}kg</span></div>
-                    <div className="flex gap-2">
-                        <button onClick={() => { setEditingId(log.id); setBodyWeightInput(log.value.toString()); setLogDate(log.rawDate); }} className="p-2 text-zinc-600"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>
-                        <button onClick={() => deleteWeight(log.id)} className="p-2 text-red-900/50"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+                  <div key={log.id} className="flex justify-between items-center bg-zinc-900/40 p-5 rounded-3xl border border-zinc-800 shadow-lg group active:scale-[0.98] transition-all">
+                    <div className="flex flex-col">
+                        <span className="text-[10px] font-black text-zinc-600 uppercase tracking-widest group-active:text-zinc-400 transition-colors">{log.date}</span>
+                        <span className="font-black italic text-3xl tabular-nums text-white group-active:text-purple-400 transition-colors">{log.value}kg</span>
                     </div>
                   </div>
                 ))}
@@ -296,10 +383,10 @@ export default function WorkoutPage() {
         <nav className="fixed bottom-0 left-0 right-0 z-50">
           <div className="absolute inset-0 bg-zinc-900/80 backdrop-blur-3xl border-t border-zinc-800" />
           <div className="relative flex justify-around items-center pt-5 pb-[calc(env(safe-area-inset-bottom)+15px)] px-6">
-            {[{ id: 'lift', label: 'WORKOUT' }, { id: 'history', label: 'HISTORY' }, { id: 'weight', label: 'BODY' }].map((nav) => (
+            {[{ id: 'lift', label: 'WORKOUT' }, { id: 'history', label: 'HISTORY' }, { id: 'weight', label: 'WEIGHT' }].map((nav) => (
               <button key={nav.id} onClick={() => setView(nav.id as any)} className="relative flex-1 flex flex-col items-center group">
-                <span className={`text-[10px] font-black uppercase tracking-[0.3em] ${view === nav.id ? "text-purple-400" : "text-zinc-600"}`}>{nav.label}</span>
-                {view === nav.id && <div className="mt-2 w-1.5 h-1.5 rounded-full bg-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.8)]" />}
+                <span className={`text-[10px] font-black uppercase tracking-[0.3em] transition-all duration-300 ${view === nav.id ? "text-purple-400" : "text-zinc-600 group-active:text-white"}`}>{nav.label}</span>
+                {view === nav.id && <div className="mt-2 w-1.5 h-1.5 rounded-full bg-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.8)] animate-in zoom-in duration-300" />}
               </button>
             ))}
           </div>
@@ -310,6 +397,9 @@ export default function WorkoutPage() {
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slide-in-from-top-1 { from { transform: translateY(-10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .animate-in { animation: fade-in 0.3s ease-out, slide-in-from-top-1 0.3s ease-out; }
       `}</style>
     </div>
   );
