@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { workoutPlan } from "./workoutData";
 
 export default function WorkoutPage() {
+  // --- YOUR EXISTING STATE & LOGIC (UNTOUCHED) ---
   const [view, setView] = useState<"lift" | "history" | "weight">("lift");
   const [subView, setSubView] = useState<"workout" | "progress">("workout");
   const [selectedWeek, setSelectedWeek] = useState(1);
@@ -181,18 +182,45 @@ export default function WorkoutPage() {
   const points = useMemo(() => weightHistory.map((d, i) => ({ ...mapPoint(d.value, d.rawDate, i), id: d.id })), [weightHistory, yMin, yMax, totalDays]);
   const polylinePoints = useMemo(() => points.map(p => `${p.x},${p.y}`).join(' '), [points]);
 
+  // --- NEW UI NAVIGATION LOGIC ---
+  const handleSwipe = (dir: 'L' | 'R') => {
+    if (dir === 'L' && view === 'lift') setView('history');
+    else if (dir === 'L' && view === 'history') setView('weight');
+    else if (dir === 'R' && view === 'weight') setView('history');
+    else if (dir === 'R' && view === 'history') setView('lift');
+  };
+
+  const startX = useRef(0);
+  const handleTouchStart = (e: React.TouchEvent) => startX.current = e.touches[0].clientX;
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const diff = startX.current - e.changedTouches[0].clientX;
+    if (diff > 70) handleSwipe('L');
+    if (diff < -70) handleSwipe('R');
+  };
+
+  const changeWeek = (dir: number) => {
+    setSelectedWeek(prev => Math.max(1, Math.min(12, prev + dir)));
+  };
+
   return (
-    <div className="max-w-[100vw] overflow-hidden min-h-screen bg-[#0a0b0d] text-white font-sans pb-40">
+    <div 
+      onTouchStart={handleTouchStart} 
+      onTouchEnd={handleTouchEnd}
+      className="max-w-[100vw] overflow-hidden min-h-screen bg-[#0a0b0d] text-white font-sans pb-40"
+    >
       {showConfetti && (
         <div className="fixed inset-0 pointer-events-none z-[200] flex items-center justify-center bg-purple-500/10 backdrop-blur-sm animate-in fade-in duration-500">
           <div className="text-center animate-bounce"><p className="text-8xl mb-2">🔥</p><p className="text-2xl font-black italic uppercase text-white tracking-tighter">NEW PB DETECTED</p></div>
         </div>
       )}
 
-      <div className="max-w-md mx-auto px-5">
+      {/* SNUG CONTAINER: px-5 adds the safe zone from the glass edges */}
+      <div className="max-w-md mx-auto px-5 relative">
         <header className="pt-8 mb-4 uppercase italic font-black">
           <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl tracking-tighter leading-none">{view === 'weight' ? 'Weight' : view === 'history' ? 'History' : 'Mesocycle 1'}</h1>
+            <h1 className="text-3xl tracking-tighter leading-none">
+                {view === 'weight' ? 'Weight' : view === 'history' ? 'History' : 'Mesocycle 1'}
+            </h1>
             <div className="relative">
               <button onClick={() => setShowOptions(!showOptions)} className="p-2 text-zinc-600 active:text-white">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
@@ -205,19 +233,25 @@ export default function WorkoutPage() {
               )}
             </div>
           </div>
+
+          {/* SINGLE TAB WEEK NAVIGATOR */}
           {view !== 'weight' && (
-            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
-              {Array.from({ length: 12 }).map((_, i) => (
-                <button key={i} onClick={() => setSelectedWeek(i + 1)} className={`flex-shrink-0 w-14 py-3 rounded-xl text-[10px] font-black border ${selectedWeek === i + 1 ? "bg-purple-600 border-purple-500 text-white" : "bg-zinc-900/40 border-zinc-800 text-zinc-600"}`}>W{i + 1}</button>
-              ))}
+            <div className="flex items-center justify-between bg-zinc-900/40 border border-zinc-800 rounded-2xl p-2 mb-2">
+               <button onClick={() => changeWeek(-1)} className="w-10 h-10 flex items-center justify-center bg-zinc-800 rounded-xl active:scale-90 transition-transform">←</button>
+               <div className="text-center">
+                  <p className="text-[8px] text-zinc-500 tracking-widest">PHASE 01</p>
+                  <p className="text-sm font-black">WEEK {selectedWeek}</p>
+               </div>
+               <button onClick={() => changeWeek(1)} className="w-10 h-10 flex items-center justify-center bg-zinc-800 rounded-xl active:scale-90 transition-transform">→</button>
             </div>
           )}
         </header>
 
         <main className="relative">
+          {/* THE SLIDING TRACK */}
           <div className={`flex transition-transform duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${view === 'history' ? '-translate-x-full' : view === 'weight' ? '-translate-x-[200%]' : 'translate-x-0'}`}>
             
-            {/* WORKOUT VIEW */}
+            {/* PAGE 1: WORKOUT VIEW */}
             <div className="min-w-full">
               <div className="flex gap-2 overflow-x-auto no-scrollbar mb-4">
                 {currentPhase.days.map((day, idx) => (
@@ -266,7 +300,7 @@ export default function WorkoutPage() {
               </div>
             </div>
 
-            {/* HISTORY VIEW */}
+            {/* PAGE 2: HISTORY VIEW */}
             <div className="min-w-full">
               <div className="flex gap-2 overflow-x-auto no-scrollbar mb-6">
                 {currentPhase.days.map((day, idx) => (
@@ -308,7 +342,7 @@ export default function WorkoutPage() {
               </div>
             </div>
 
-            {/* WEIGHT VIEW */}
+            {/* PAGE 3: WEIGHT VIEW */}
             <div className="min-w-full">
               <div className="bg-zinc-900 border border-zinc-800 rounded-[40px] p-6 mb-4 shadow-xl">
                  <div className="flex gap-3 mb-4 flex-col sm:flex-row">
